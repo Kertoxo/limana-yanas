@@ -376,7 +376,7 @@ body { height: 100%; margin: 0; background: var(--navy); color: var(--ink); font
         <h2 id="tReplay">Skoru doğrula</h2>
         <p>Google tablosundaki "Sıralama" sayfasında kazananın <b>Tekrar kodu</b> hücrelerini seçip kopyala, buraya yapıştır.</p>
         <label class="field" for="replayIn"><span>Tekrar kodu</span>
-          <textarea class="replay-in" id="replayIn" rows="4" spellcheck="false" autocomplete="off" placeholder="LY1.…"></textarea>
+          <textarea class="replay-in" id="replayIn" rows="4" spellcheck="false" autocomplete="off" placeholder="LY4.…"></textarea>
         </label>
         <div class="replay-res" id="replayRes" role="status" hidden></div>
         <div class="btn-row">
@@ -2351,6 +2351,7 @@ const CONFIG = {
 
   // ---------- Yönetici: tekrar izle ekranı (adres sonuna #tekrar) ----------
   const repIn = $('#replayIn'), repRes = $('#replayRes');
+  repIn.placeholder = GAME_VER + '.…';
   function showReplayScreen(msgHTML) {
     showOverlay('replay');
     repRes.innerHTML = msgHTML || ''; repRes.hidden = !msgHTML;
