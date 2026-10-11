@@ -22,3 +22,5 @@ Oyun adresinin sonuna `#tekrar` ekleyip aç, Google Tablo'daki "Tekrar kodu" hü
 ## Önemli
 Oyun kuralları (hız, zorluk, etkinlikler) değişirse `GAME_VER` artırılmalı; eski tekrar kodları o sürüme aittir.
 Sunucudaki `GAME_VER` de aynı olmalı.
+
+Canlı adres: https://kertoxo.github.io/limana-yanas/
