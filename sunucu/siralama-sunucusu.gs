@@ -36,7 +36,7 @@
 const SHEET_BEST = 'Sıralama';
 const SHEET_LOG = 'Tüm Oyunlar';
 const MAX_SCORE = 3600;           // 1 saatten uzun skor kabul edilmez
-const GAME_VER = 'LY4';           // oyundaki GAME_VER ile aynı olmalı
+const GAME_VER = 'LY5';           // oyundaki GAME_VER ile aynı olmalı
 const CHUNK = 45000;              // bir hücreye yazılacak en fazla karakter (Sheets sınırı 50.000)
 const MAX_CHUNKS = 12;            // tekrar kodu için ayrılan sütun sayısı
 const TOKEN_TTL = 21600;          // bilet ömrü: 6 saat (Apps Script önbellek sınırı)
@@ -79,9 +79,9 @@ function startToken_() {
   return { ok: true, token: token, seed: seed };
 }
 
-// Tekrar kodunu çözer: LY4.<tohum36>.<skor x10>.<adım36>.<hareketler>
+// Tekrar kodunu çözer: LY5.<tohum36>.<skor x10>.<adım36>.<hareketler>
 function parseReplay_(code) {
-  const m = /^LY4\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(String(code || ''));
+  const m = /^LY5\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(String(code || ''));
   if (!m) return null;
   return { seed: parseInt(m[1], 36), tenths: Number(m[2]), ticks: parseInt(m[3], 36), moves: m[4] };
 }
