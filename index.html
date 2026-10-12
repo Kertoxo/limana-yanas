@@ -464,7 +464,7 @@ const CONFIG = {
   const randomSeed = () => { try { return crypto.getRandomValues(new Uint32Array(1))[0]; } catch (e) { return (Math.random() * 4294967296) >>> 0; } };
   G.seed(randomSeed());
   const STEP = 1 / 60;          // sabit fizik adımı
-  const GAME_VER = 'LY6';       // oyun kuralları değişirse artırılır (eski tekrar kodları o sürüme aittir)
+  const GAME_VER = 'LY7';       // oyun kuralları değişirse artırılır (eski tekrar kodları o sürüme aittir)
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   Object.freeze(CONFIG);
@@ -542,6 +542,7 @@ const CONFIG = {
   // [6, 26): 20 sn fırtına (sadece kayalık, simitler batık gemilerde); [26, 29): fırtına diner, buzlar döner.
   const EV = { start: 80, talk: 4.5, storm: 6, len: 30, out: 3 };
   const FLOW_STORM = 0.9;     // fırtına başında deniz %90 daha hızlı akar...
+  const LODOS1_END = 116;    // ilk lodosun bittiği an (EV.start + EV.storm + EV.len)
   const FLOW_RAMP = 0.5;      // ...ve fırtına boyunca %50 daha hızlanır (sonunda ~2,4 kat)
   const SWELL_PUSH = 1000;    // dev dalganın gemiye verdiği yan itiş
   const SWELL_DRIFT = 0.4;    // itişten sonra dümenin kısa süre tutmadığı süre (sn): gemi daha uzağa savrulur
@@ -1217,7 +1218,13 @@ const CONFIG = {
   // Zorluk: hikâye modunda 25 sn'ye yayılır, sınırsız modda ~100 sn'de tavana yaklaşır ve yavaşça artmaya devam eder
   function diff() {
     if (mode === 'endless') {
-      const p = clamp(t / 100, 0, 1), extra = Math.min(0.25, Math.max(0, t - 100) * 0.002);
+      const p = clamp(t / 100, 0, 1);
+      if (t >= LODOS1_END) {
+        // ilk lodostan sonra zorluk bir tık hafifler: daha seyrek, biraz daha yavaş buz, daha az takipçi
+        const extra = Math.min(0.15, (t - LODOS1_END) * 0.0012);
+        return { p, spawnInt: 0.45, speedMul: 1.38 + extra, chaser: 0.4, rockInt: 2.5 };
+      }
+      const extra = Math.min(0.25, Math.max(0, t - 100) * 0.002);
       return { p, spawnInt: lerp(0.95, 0.36, p), speedMul: 1 + 0.5 * p + extra, chaser: 0.14 + 0.36 * p, rockInt: lerp(3.1, 2.2, p) };
     }
     const p = clamp(t / GS, 0, 1);
@@ -2831,7 +2838,7 @@ const CONFIG = {
   }
 
   // ---------- Oyun kaydı (tekrar kodu) ----------
-  // Biçim: LY6.<tohum>.<skor x10>.<adım sayısı>.<hareketler>
+  // Biçim: LY7.<tohum>.<skor x10>.<adım sayısı>.<hareketler>
   // Her hareket: "adım farkı" + "±x farkı" [+ "±y farkı" (usta kaptan geldikten sonra ileri-geri)]
   // Hareketler: "adım farkı" + "+/-" + "x farkı" (36'lık tabanda), virgülle ayrılmış
   const scoreOf = (ticks) => Math.floor(ticks / 6) / 10;     // 60 adım = 1 sn, 0,1 sn hassasiyet
@@ -2847,7 +2854,7 @@ const CONFIG = {
   }
   function decodeRun(code) {
     code = String(code || '').replace(/\s+/g, '');
-    const m = /^LY6\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(code);
+    const m = /^LY7\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(code);
     if (!m) return null;
     const seed = parseInt(m[1], 36), ticks = parseInt(m[3], 36);
     if (!(seed >= 0 && seed <= 4294967295) || !(ticks > 0)) return null;
