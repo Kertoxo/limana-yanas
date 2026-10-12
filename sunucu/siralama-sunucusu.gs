@@ -181,6 +181,7 @@ function submit_(b) {
 
 // İlk kurulumda bir kez çalıştır (izinleri onaylatır, sayfaları başlıklarıyla oluşturur)
 function kurulum() {
+  secret_();                                   // bilet imza anahtarını bir kez oluşturur
   const ss = ss_();
   sheet_(ss, SHEET_LOG, LOG_HEADERS);
   const best = sheet_(ss, SHEET_BEST, bestHeaders_());
