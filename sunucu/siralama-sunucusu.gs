@@ -33,8 +33,12 @@
  *  - Sıralamada sadece "Ad S." görünür; soyadın tamamı ve cihaz kimliği dışarı verilmez.
  */
 
+// E-Tablonun kimliği (adres çubuğundaki /d/ ile /edit arasındaki kısım). Betik E-Tablo'nun içinden
+// (Uzantılar > Apps Script) açıldıysa boş bırakılabilir.
+const SPREADSHEET_ID = '1GEGGbOeipDVGlsY8MyGGIdWVauaI2gDMQEqnGne0GbQ';
 const SHEET_BEST = 'Sıralama';
 const SHEET_LOG = 'Tüm Oyunlar';
+const LOG_HEADERS = ['Zaman', 'Cihaz', 'Ad', 'Soyad', 'Skor (sn)', 'Gerçek süre (sn)', 'Hareket sayısı'];
 const MAX_SCORE = 3600;           // 1 saatten uzun skor kabul edilmez
 const GAME_VER = 'LY7';           // oyundaki GAME_VER ile aynı olmalı
 const CHUNK = 45000;              // bir hücreye yazılacak en fazla karakter (Sheets sınırı 50.000)
@@ -122,13 +126,11 @@ function submit_(b) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const ss = SpreadsheetApp.getActive();
-    const log = sheet_(ss, SHEET_LOG, ['Zaman', 'Cihaz', 'Ad', 'Soyad', 'Skor (sn)', 'Gerçek süre (sn)', 'Hareket sayısı']);
+    const ss = ss_();
+    const log = sheet_(ss, SHEET_LOG, LOG_HEADERS);
     log.appendRow([new Date(), id, clean_(first), clean_(last), score, Math.round(elapsed), rep.moves ? rep.moves.split(',').length : 0]);
 
-    const headers = ['Cihaz', 'Ad', 'Soyad', 'En iyi skor (sn)', 'Son oyun', 'Oyun sayısı'];
-    for (let k = 1; k <= MAX_CHUNKS; k++) headers.push('Tekrar kodu ' + k);
-    const best = sheet_(ss, SHEET_BEST, headers);
+    const best = sheet_(ss, SHEET_BEST, bestHeaders_());
     const chunks = [];
     for (let k = 0; k < MAX_CHUNKS; k++) chunks.push(code.slice(k * CHUNK, (k + 1) * CHUNK));
     const data = best.getRange(1, 1, Math.max(1, best.getLastRow()), 6).getValues();
@@ -147,6 +149,27 @@ function submit_(b) {
   return board_(id, 10);
 }
 
+// İlk kurulumda bir kez çalıştır (izinleri onaylatır, sayfaları başlıklarıyla oluşturur)
+function kurulum() {
+  const ss = ss_();
+  sheet_(ss, SHEET_LOG, LOG_HEADERS);
+  const best = sheet_(ss, SHEET_BEST, bestHeaders_());
+  const def = ss.getSheetByName('Sayfa1') || ss.getSheetByName('Sheet1');
+  if (def && def.getLastRow() === 0 && ss.getSheets().length > 2) ss.deleteSheet(def);
+  ss.setActiveSheet(best);
+  return 'ok';
+}
+
+function bestHeaders_() {
+  const headers = ['Cihaz', 'Ad', 'Soyad', 'En iyi skor (sn)', 'Son oyun', 'Oyun sayısı'];
+  for (let k = 1; k <= MAX_CHUNKS; k++) headers.push('Tekrar kodu ' + k);
+  return headers;
+}
+
+function ss_() {
+  return SpreadsheetApp.getActive() || SpreadsheetApp.openById(SPREADSHEET_ID);
+}
+
 function sheet_(ss, name, headers) {
   let sh = ss.getSheetByName(name);
   if (!sh) {
@@ -159,7 +182,7 @@ function sheet_(ss, name, headers) {
 
 function board_(id, limit) {
   limit = Math.max(1, Math.min(20, limit));
-  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_BEST);
+  const sh = ss_().getSheetByName(SHEET_BEST);
   const rows = sh && sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues() : [];
   const list = rows
     .filter(function (r) { return r[0] && Number(r[3]) > 0; })
