@@ -43,7 +43,7 @@ const MAX_SCORE = 3600;           // 1 saatten uzun skor kabul edilmez
 const GAME_VER = 'LY7';           // oyundaki GAME_VER ile aynı olmalı
 const CHUNK = 45000;              // bir hücreye yazılacak en fazla karakter (Sheets sınırı 50.000)
 const MAX_CHUNKS = 12;            // tekrar kodu için ayrılan sütun sayısı
-const TOKEN_TTL = 21600;          // bilet ömrü: 6 saat (Apps Script önbellek sınırı)
+const TOKEN_TTL = 8 * 3600;       // bilet ömrü: 8 saat (saniye)
 const NAME_RE = /^\p{L}[\p{L} '\-.]{0,29}$/u;
 const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 
@@ -76,11 +76,41 @@ function json_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// Bilet sunucuda saklanmaz: içinde zaman + tohum vardır ve gizli anahtarla imzalanır.
+// Böylece hiçbir yer kaplamaz, önbellek boşalsa da kaybolmaz, oyuncu tarafından değiştirilemez.
+let secretCache_ = null;
+function secret_() {
+  if (secretCache_) return secretCache_;
+  const props = PropertiesService.getScriptProperties();
+  let s = props.getProperty('SECRET');
+  if (!s) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      s = props.getProperty('SECRET');
+      if (!s) { s = Utilities.getUuid() + Utilities.getUuid(); props.setProperty('SECRET', s); }
+    } finally { lock.releaseLock(); }
+  }
+  secretCache_ = s;
+  return s;
+}
+function sign_(body) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(body, secret_())).replace(/=+$/, '');
+}
 function startToken_() {
-  const token = Utilities.getUuid();
   const seed = Math.floor(Math.random() * 4294967296);
-  CacheService.getScriptCache().put('t_' + token, JSON.stringify({ t: Date.now(), s: seed }), TOKEN_TTL);
-  return { ok: true, token: token, seed: seed };
+  const body = Date.now().toString(36) + '.' + seed.toString(36) + '.' + Math.floor(Math.random() * 1e9).toString(36);
+  return { ok: true, token: body + '.' + sign_(body), seed: seed };
+}
+// Bileti çözer ve imzasını kontrol eder: { t, s, sig } ya da null
+function readToken_(token) {
+  const m = /^([0-9a-z]{6,12})\.([0-9a-z]{1,7})\.([0-9a-z]{1,7})\.([A-Za-z0-9_-]{20,64})$/.exec(String(token || ''));
+  if (!m) return null;
+  const body = m[1] + '.' + m[2] + '.' + m[3];
+  if (sign_(body) !== m[4]) return null;
+  const t = parseInt(m[1], 36), sd = parseInt(m[2], 36);
+  if (!(t > 0) || Date.now() - t > TOKEN_TTL * 1000 || t > Date.now() + 60000) return null;
+  return { t: t, s: sd, sig: m[4] };
 }
 
 // Tekrar kodunu çözer: LY7.<tohum36>.<skor x10>.<adım36>.<hareketler>
@@ -107,13 +137,11 @@ function submit_(b) {
 
   const cache = CacheService.getScriptCache();
   if (cache.get('r_' + id)) return { ok: false, error: 'rate' };
-  const token = String(b.token || '');
-  const startedRaw = token && cache.get('t_' + token);
-  if (!startedRaw) return { ok: false, error: 'bad_token' };
-  cache.remove('t_' + token);                              // tek kullanımlık
-  let started;
-  try { started = JSON.parse(startedRaw); } catch (e) { return { ok: false, error: 'bad_token' }; }
-  const elapsed = (Date.now() - Number(started.t)) / 1000;
+  const started = readToken_(b.token);
+  if (!started) return { ok: false, error: 'bad_token' };
+  const usedKey = 'u_' + started.sig.slice(0, 40);
+  if (cache.get(usedKey)) return { ok: false, error: 'bad_token' };    // bilet tek kullanımlık
+  const elapsed = (Date.now() - started.t) / 1000;
   if (score > elapsed + 3) return { ok: false, error: 'too_fast' };
   // Tekrar kodu kontrolü: sunucunun verdiği tohum, gönderilen skor ve adım sayısı birbirini tutmalı
   const code = String(b.replay || '');
@@ -121,11 +149,13 @@ function submit_(b) {
   if (!rep || code.length > CHUNK * MAX_CHUNKS) return { ok: false, error: 'bad_replay' };
   if (rep.seed !== Number(started.s)) return { ok: false, error: 'bad_replay' };
   if (rep.tenths !== Math.round(score * 10) || Math.floor(rep.ticks / 6) !== rep.tenths) return { ok: false, error: 'bad_replay' };
-  cache.put('r_' + id, '1', 5);
-
+  // Kalabalıkta aynı anda gelen skorlar sırayla yazılır; sıra çok uzarsa bilet harcanmadan "busy" döner, oyun tekrar dener
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  if (!lock.tryLock(25000)) return { ok: false, error: 'busy' };
   try {
+    if (cache.get(usedKey)) return { ok: false, error: 'bad_token' };
+    cache.put(usedKey, '1', 21600);
+    cache.put('r_' + id, '1', 5);
     const ss = ss_();
     const log = sheet_(ss, SHEET_LOG, LOG_HEADERS);
     log.appendRow([new Date(), id, clean_(first), clean_(last), score, Math.round(elapsed), rep.moves ? rep.moves.split(',').length : 0]);

@@ -1030,8 +1030,9 @@ const CONFIG = {
       },
       async top() { return online ? req('GET', { action: 'top', id: profile.id, limit: 10 }) : localBoard(); },
       async submit(score, token, code) {
+        // en iyi oyunun tekrar kodu her durumda cihazda da saklanır (#tekrar > "Bu cihazdaki en iyi oyun")
+        if (code && score >= (store.get('gmk-best-replay-score') || 0)) { store.set('gmk-best-replay', code); store.set('gmk-best-replay-score', score); }
         if (!online) {
-          if (code && score >= (store.get('gmk-best-replay-score') || 0)) { store.set('gmk-best-replay', code); store.set('gmk-best-replay-score', score); }
           const list = loadLocal();
           const name = shortName(profile.first, profile.last);
           const mine = list.find((x) => x.id === profile.id);
@@ -1041,7 +1042,14 @@ const CONFIG = {
           store.set('gmk-local-board', list.slice(0, 50));
           return localBoard();
         }
-        return req('POST', {}, { action: 'submit', id: profile.id, first: profile.first, last: profile.last, score, token, replay: code }, 40000);
+        const body = { action: 'submit', id: profile.id, first: profile.first, last: profile.last, score, token, replay: code };
+        let r = await req('POST', {}, body, 40000);
+        // sunucu yoğunsa (sıra dolu) bilet harcanmaz: birkaç saniye sonra tekrar dene
+        for (let k = 0; k < 3 && r && (r.error === 'busy' || r.error === 'server' || r.error === 'rate'); k++) {
+          await new Promise((res) => setTimeout(res, 2500 + k * 2500));
+          r = await req('POST', {}, body, 40000);
+        }
+        return r;
       },
     };
   })();
@@ -1053,6 +1061,7 @@ const CONFIG = {
     rate: 'Çok hızlı gönderim yapıldı, birazdan tekrar dene.',
     bad_replay: 'Oyun kaydı doğrulanamadı, bu tur sıralamaya yazılmadı.',
     bad_name: 'İsim kabul edilmedi.',
+    busy: 'Sunucu şu an çok yoğun, skor yazılamadı. En iyi skorun bu cihazda saklı.',
   };
   function renderBoard(res, score) {
     const list = $('#boardList'), note = $('#boardNote');
@@ -1060,7 +1069,7 @@ const CONFIG = {
     $('#boardTitle').textContent = score != null ? fmt(score) + ' sn dayandın' : 'Sıralama';
     let chips = '';
     if (profile.best > 0) chips += chip('En iyin: ' + fmt(profile.best) + ' sn');
-    if (res && res.ok && res.me && res.total) chips += chip('Sıran: ' + res.me.rank + ' / ' + res.total);
+    if (res && res.ok && res.me && res.total) chips += chip('Sıran: ' + (Number(res.me.rank) || '?') + ' / ' + (Number(res.total) || '?'));
     $('#boardChips').innerHTML = chips;
     let msg = '';
     if (!res) msg = 'Sıralama yükleniyor…';
