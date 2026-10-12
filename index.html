@@ -913,6 +913,7 @@ const CONFIG = {
   function showOverlay(name) {
     for (const k in overlays) overlays[k].hidden = k !== name;
     if (name === 'start') renderStart();
+    if (name === 'start' || name === 'board' || name === 'win') setTimeout(() => { try { LB.prefetch(); } catch (e) {} }, 0);
     const focusEl = name === 'start' ? (profile.unlocked ? $('#btnEndless') : $('#btnStart')) : name === 'lose' ? $('#btnRetry') : name === 'name' ? $('#inFirst') : name === 'board' ? $('#btnEndlessAgain') : name === 'replay' ? repIn : null;
     if (focusEl) setTimeout(() => { try { focusEl.focus({ preventScroll: true }); } catch (e) {} }, 60);
   }
@@ -969,9 +970,9 @@ const CONFIG = {
   // ---------- Sıralama ----------
   const LB = (() => {
     const online = !!lbUrl;
-    async function req(method, params, body) {
+    async function req(method, params, body, ms) {
       const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const to = setTimeout(() => ctrl && ctrl.abort(), 9000);
+      const to = setTimeout(() => ctrl && ctrl.abort(), ms || 15000);
       try {
         const u = new URL(lbUrl);
         for (const k in params) u.searchParams.set(k, params[k]);
@@ -1003,12 +1004,29 @@ const CONFIG = {
       const meI = list.findIndex((x) => x.id === profile.id);
       return { ok: true, local: true, total: list.length, top, me: meI >= 0 ? { rank: meI + 1, score: list[meI].score } : null };
     }
+    // Bilet, oyuncu menüdeyken önceden alınır: kalabalıkta sunucu yavaşlasa bile oyun beklemeden başlar
+    let pre = null, preAt = 0;
+    function fetchTicket() {
+      return req('GET', { action: 'start' }, null, 20000)
+        .then((r) => (r.ok ? { token: String(r.token), seed: Number(r.seed) >>> 0 } : null));
+    }
+    function prefetch() {
+      if (!online || !profile.unlocked) return;
+      if (pre && Date.now() - preAt < 5 * 3600 * 1000) return;           // bilet 6 saat geçerli
+      preAt = Date.now();
+      const p = fetchTicket();
+      pre = p;
+      p.then((x) => { if (!x && pre === p) pre = null; });              // başarısızsa sonra yeniden dene
+    }
     return {
       online,
-      async start() {
-        if (!online) return { token: null, seed: randomSeed() };          // çevrimdışı: yerel tohum
-        const r = await req('GET', { action: 'start' });
-        return r.ok ? { token: String(r.token), seed: Number(r.seed) >>> 0 } : null;
+      prefetch,
+      start() {
+        if (!online) return Promise.resolve({ token: null, seed: randomSeed() });   // çevrimdışı: yerel tohum
+        const p = pre && Date.now() - preAt < 5 * 3600 * 1000 ? pre : fetchTicket();
+        pre = null;
+        setTimeout(prefetch, 1500);                                       // bir sonraki tur için şimdiden al
+        return p;
       },
       async top() { return online ? req('GET', { action: 'top', id: profile.id, limit: 10 }) : localBoard(); },
       async submit(score, token, code) {
@@ -1023,7 +1041,7 @@ const CONFIG = {
           store.set('gmk-local-board', list.slice(0, 50));
           return localBoard();
         }
-        return req('POST', {}, { action: 'submit', id: profile.id, first: profile.first, last: profile.last, score, token, replay: code });
+        return req('POST', {}, { action: 'submit', id: profile.id, first: profile.first, last: profile.last, score, token, replay: code }, 40000);
       },
     };
   })();
@@ -1152,7 +1170,7 @@ const CONFIG = {
       runToken.then((x) => { if (state === 'countdown') seedInfo = x || { token: null }; });
     }
     const ready = !seedInfo.pending;
-    if ((cd >= 1.8 && ready) || cd >= 5) {
+    if ((cd >= 1.8 && ready) || cd >= 12) {
       const ok = ready && Number.isFinite(seedInfo.seed);
       runVerified = ok && !!seedInfo.token;
       const s = ok ? seedInfo.seed : randomSeed();
