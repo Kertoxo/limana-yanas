@@ -270,10 +270,6 @@ body { height: 100%; margin: 0; background: var(--navy); color: var(--ink); font
             <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 33l-9 5q5-1 9-3 4 2 9 3z" fill="#4f80b2" stroke="#13304a" stroke-width="2" stroke-linejoin="round"/><path d="M20 3C31 3 31 18 28 25 25 32 20 34 20 34 20 34 15 32 12 25 9 18 9 3 20 3Z" fill="#4f80b2" stroke="#13304a" stroke-width="2.4" stroke-linejoin="round"/><circle cx="14" cy="9" r="1.6" fill="#13304a"/><circle cx="26" cy="9" r="1.6" fill="#13304a"/><path d="M17 5q3 2 6 0" fill="none" stroke="#13304a" stroke-width="1.6" stroke-linecap="round"/><path d="M20 22l4-5h-2.5v-5h-3v5H16z" fill="#f2b134" stroke="#13304a" stroke-width="1.4" stroke-linejoin="round"/></svg>
             <span><b>Balinalar</b> (sınırsız mod): sırtına çık, kuyruğuyla seni havaya ve ileri fırlatsın.</span>
           </div>
-          <div class="legend-row">
-            <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M11 22a7 7 0 0 1 1-14 9 9 0 0 1 17 2 6 6 0 0 1 0 12z" fill="#5d6f82" stroke="#13304a" stroke-width="2.4" stroke-linejoin="round"/><path d="M21 22l-4 8h5l-3 8 9-11h-5l3-5z" fill="#f2b134" stroke="#13304a" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 28l-2 5M14 30l-2 5M30 27l-2 5" stroke="#4a90c2" stroke-width="2.2" stroke-linecap="round"/></svg>
-            <span><b>Lodos</b> (sınırsız mod, 80. sn): 30 saniye karanlık deniz, giderek hızlanan kayalıklar ve seni savuran dev dalgalar. Simitler batık gemilerde.</span>
-          </div>
         </div>
         <div class="start-actions" id="startLocked">
           <button class="btn" id="btnStart" type="button">Demir al!</button>
@@ -468,7 +464,7 @@ const CONFIG = {
   const randomSeed = () => { try { return crypto.getRandomValues(new Uint32Array(1))[0]; } catch (e) { return (Math.random() * 4294967296) >>> 0; } };
   G.seed(randomSeed());
   const STEP = 1 / 60;          // sabit fizik adımı
-  const GAME_VER = 'LY5';       // oyun kuralları değişirse artırılır (eski tekrar kodları o sürüme aittir)
+  const GAME_VER = 'LY6';       // oyun kuralları değişirse artırılır (eski tekrar kodları o sürüme aittir)
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   Object.freeze(CONFIG);
@@ -534,7 +530,7 @@ const CONFIG = {
   let clock = 0, t = 0, lives = CONFIG.LIVES, dodged = 0, hitsBerg = 0, hitsRock = 0, lastHit = 'berg';
   let invuln = 0, shake = 0, flash = 0, spawnT = 0, rockT = 0, endT = 0, scroll = 0, seaMul = 1;
   const SEA = 90;
-  const ship = { x: W / 2, y: 640, vx: 0, tilt: 0, targetX: W / 2, sink: 0 };
+  const ship = { x: W / 2, y: 640, vx: 0, vy: 0, tilt: 0, targetX: W / 2, targetY: 685, sink: 0, pushT: 0 };
   let bergs = [], rocks = [], parts = [], gulls = [], buoys = [], whales = [];
   // Balina (sadece sınırsız mod): sırtına çıkan gemiyi kuyruğuyla havaya ve ileri fırlatır
   const AIR_T = 2.0;          // havada kalma süresi (sn)
@@ -547,7 +543,8 @@ const CONFIG = {
   const EV = { start: 80, talk: 4.5, storm: 6, len: 30, out: 3 };
   const FLOW_STORM = 0.9;     // fırtına başında deniz %90 daha hızlı akar...
   const FLOW_RAMP = 0.5;      // ...ve fırtına boyunca %50 daha hızlanır (sonunda ~2,4 kat)
-  const SWELL_PUSH = 720;     // dev dalganın gemiye verdiği yan itiş
+  const SWELL_PUSH = 1000;    // dev dalganın gemiye verdiği yan itiş
+  const SWELL_DRIFT = 0.4;    // itişten sonra dümenin kısa süre tutmadığı süre (sn): gemi daha uzağa savrulur
   let swells = [], swellT = 0;
   // ===== Cthulhu (sınırsız mod, 190. sn) =====
   // b = t - BOSS.start. [0,15): ekran boşalır, deniz kararır; 15: flaşla sudan çıkar; [17,28): kükreme;
@@ -555,6 +552,20 @@ const CONFIG = {
   const BOSS = { start: 190, emerge: 15, fight: 28, len: 30, rescue: 60, back: 68 };
   const LANE_HW = 39, ERUPT_R = 48;   // üstten vuruş şeridinin yarı genişliği, alttan çıkış dairesinin yarıçapı
   let boss = null, bossVis = 0, bossAtkT = 0, rescue = null, hitsBoss = 0, whiteFlash = 0;
+  // ===== Tekrarlayan lodos (boss'tan sonra, girişsiz) =====
+  const LODOS_REPEAT = { first: 338, every: 80, lead: 3 };
+  // Hangi lodos penceresindeyiz? k=0: 80. sn'deki ilk (tekneli) lodos, k>=1: tekrarlar
+  function lodosE(tt) {
+    if (tt < LODOS_REPEAT.first - 10) return { e: tt - EV.start, k: 0 };
+    const k = Math.floor((tt - LODOS_REPEAT.first + 10) / LODOS_REPEAT.every);
+    return { e: tt - (LODOS_REPEAT.first + k * LODOS_REPEAT.every) + LODOS_REPEAT.lead, k: k + 1 };
+  }
+  let evK = 0;
+  // ===== Mürettebat: Çapacı (120. sn, buz kırar) → boss sonrası Usta Kaptan (ileri-geri sürüş) =====
+  const CREW = { join: 120, every: 4.5, fly: 0.35, blast: 78, reach: 430 };
+  const Y_MIN = shipY - 300, Y_MAX = shipY + 40;   // usta kaptanla gidilebilecek ileri/geri sınırları
+  let crew = null, liveY = shipY, anchors = [], blasts = [];
+  const captainOn = () => !!(crew && crew.role === 'captain' && t >= crew.swapT + 1.4);
   const stormP = (e) => clamp((e - EV.storm) / EV.len, 0, 1);   // fırtınanın ne kadarı geçti (0..1)
   let flowMul = 1, stormVis = 0, npc = null, wrecks = [], evFlags = {}, wreckT = 0, stormRockT = 0, lightning = 0, banner = null;
   function stormK(e) {
@@ -574,7 +585,7 @@ const CONFIG = {
   let headless = false, cd = 0, speed = 1;
   let dock = null;
   let waves = [];
-  const keys = { left: false, right: false };
+  const keys = { left: false, right: false, up: false, down: false };
 
   // ---------- Yerleşim ----------
   function layout() {
@@ -815,6 +826,8 @@ const CONFIG = {
       slam() { noise(0.35, 0.45, 160); tone(55, 0.4, 'sine', 0.28, 35); },
       erupt() { noise(0.6, 0.38, 700); tone(180, 0.5, 'triangle', 0.08, 60); },
       warn() { tone(1320, 0.07, 'square', 0.022); tone(1320, 0.07, 'square', 0.022, null, 0.12); },
+      anchor() { tone(300, 0.3, 'sine', 0.08, 900); noise(0.2, 0.12, 2200); },
+      anchorHit() { tone(900, 0.08, 'square', 0.05, 500); noise(0.35, 0.35, 1500); tone(120, 0.25, 'sine', 0.15, 60); },
       start() { tone(660, 0.14, 'triangle', 0.12); tone(990, 0.22, 'triangle', 0.12, null, 0.1); },
       berg() { noise(0.25, 0.4, 1400); tone(420, 0.25, 'triangle', 0.12, 140); },
       rock() { noise(0.35, 0.45, 380); tone(110, 0.3, 'sine', 0.3, 50); },
@@ -1110,6 +1123,7 @@ const CONFIG = {
     spawnT = 0.5; rockT = 1.8; whaleT = 10; whales = []; boostV = 0; ship.air = 0;
     flowMul = 1; npc = null; wrecks = []; evFlags = {}; wreckT = 0; stormRockT = 0; banner = null; swells = []; swellT = 0;
     boss = null; rescue = null; bossAtkT = 0; hitsBoss = 0; whiteFlash = 0;
+    evK = 0; crew = null; anchors = []; blasts = []; liveY = shipY; ship.targetY = shipY; ship.vy = 0; ship.pushT = 0;
     if (!headless) sfx.bossEnd();
     ship.x = ship.targetX = W / 2; ship.vx = 0; ship.tilt = 0; ship.sink = 0; ship.y = shipY; ship.hasBottle = false;
     pier.active = false; pier.k = 0; pier.y = -150;
@@ -1162,26 +1176,32 @@ const CONFIG = {
 
   // ---------- Girdi ----------
   function pointerX(e) { const r = frame.getBoundingClientRect(); return (e.clientX - r.left) / scale; }
+  function pointerY(e) { const r = frame.getBoundingClientRect(); return (e.clientY - r.top) / scale + viewTop; }
+  const setLiveY = (e) => { liveY = clamp(pointerY(e) - 70, Y_MIN, Y_MAX); };   // gemi parmağın biraz üstünde durur
   frame.addEventListener('pointerdown', (e) => {
     if (e.target.closest('.overlay')) return;
     sfx.unlock();
-    liveX = clamp(pointerX(e), 24, W - 24);
+    liveX = clamp(pointerX(e), 24, W - 24); setLiveY(e);
   });
   frame.addEventListener('pointermove', (e) => {
     if (e.target.closest('.overlay') && state !== 'play') return;
-    if (e.pointerType === 'mouse' || e.buttons || e.pressure > 0) liveX = clamp(pointerX(e), 24, W - 24);
+    if (e.pointerType === 'mouse' || e.buttons || e.pressure > 0) { liveX = clamp(pointerX(e), 24, W - 24); setLiveY(e); }
   });
-  const LEFT = ['ArrowLeft', 'a', 'A'], RIGHT = ['ArrowRight', 'd', 'D'];
+  const LEFT = ['ArrowLeft', 'a', 'A'], RIGHT = ['ArrowRight', 'd', 'D'], UP = ['ArrowUp', 'w', 'W'], DOWN = ['ArrowDown', 's', 'S'];
   window.addEventListener('keydown', (e) => {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (LEFT.includes(e.key)) { keys.left = true; if (state === 'play') e.preventDefault(); }
     else if (RIGHT.includes(e.key)) { keys.right = true; if (state === 'play') e.preventDefault(); }
+    else if (UP.includes(e.key)) { keys.up = true; if (state === 'play') e.preventDefault(); }
+    else if (DOWN.includes(e.key)) { keys.down = true; if (state === 'play') e.preventDefault(); }
   });
   window.addEventListener('keyup', (e) => {
     if (LEFT.includes(e.key)) keys.left = false;
     else if (RIGHT.includes(e.key)) keys.right = false;
+    else if (UP.includes(e.key)) keys.up = false;
+    else if (DOWN.includes(e.key)) keys.down = false;
   });
-  window.addEventListener('blur', () => { keys.left = keys.right = false; });
+  window.addEventListener('blur', () => { keys.left = keys.right = keys.up = keys.down = false; });
 
   // ---------- Üreticiler ----------
   function makePoly(n, r, lo, hi) {
@@ -1324,15 +1344,21 @@ const CONFIG = {
   // Canlı oyunda parmaktan/klavyeden okunur ve değişince kaydedilir; tekrarda kayıttan okunur.
   function applyInput() {
     if (replay) {
-      while (tapeIdx < replay.tape.length && replay.tape[tapeIdx][0] === tick) { ship.targetX = replay.tape[tapeIdx][1]; tapeIdx++; }
+      while (tapeIdx < replay.tape.length && replay.tape[tapeIdx][0] === tick) { ship.targetX = replay.tape[tapeIdx][1]; ship.targetY = replay.tape[tapeIdx][2]; tapeIdx++; }
       return;
     }
     const kd = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
     if (kd) liveX = clamp(liveX + kd * MAXS * 1.1 * STEP, 24, W - 24);
     const want = Math.round(clamp(liveX, 24, W - 24));
-    if (want !== ship.targetX && tick - lastInTick >= 2) {        // en fazla saniyede 30 kayıt
-      ship.targetX = want; lastInTick = tick;
-      if (recording) tape.push([tick, want]);
+    let wantY = shipY;
+    if (captainOn()) {
+      const ky = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+      if (ky) liveY = clamp(liveY + ky * 340 * STEP, Y_MIN, Y_MAX);
+      wantY = Math.round(clamp(liveY, Y_MIN, Y_MAX));
+    }
+    if ((want !== ship.targetX || wantY !== ship.targetY) && tick - lastInTick >= 2) {        // en fazla saniyede 30 kayıt
+      ship.targetX = want; ship.targetY = wantY; lastInTick = tick;
+      if (recording) tape.push([tick, want, wantY]);
     }
   }
   function update(dt) {
@@ -1354,7 +1380,7 @@ const CONFIG = {
           if (!headless) sfx.land();
         }
       }
-      if (mode === 'endless') { runEvent(t - EV.start); runBoss(t - BOSS.start); }
+      if (mode === 'endless') { const L = lodosE(t); runEvent(L.e, L.k); runBoss(t - BOSS.start); runCrew(); }
       if (mode === 'story') {
         // limanın görünmesi
         if (t >= GS - 2.6 && !pier.active) pier.active = true;
@@ -1370,7 +1396,7 @@ const CONFIG = {
     const flow = SEA * seaMul * flowMul;       // denizin akış hızı (fırtınada artar)
     scroll += (flow + boostV) * dt;
     // görsel fırtına koyuluğu (oyunun sonucunu etkilemez)
-    const visT = (mode === 'endless' && (state === 'play' || state === 'sinking')) ? stormK(t - EV.start) : 0;
+    const visT = (mode === 'endless' && (state === 'play' || state === 'sinking')) ? stormK(lodosE(t).e) : 0;
     stormVis += (visT - stormVis) * Math.min(1, dt * 2.5);
     lightning = Math.max(0, lightning - dt * 3);
     if (!headless && state === 'play' && stormVis > 0.85 && Math.random() < dt * 0.16) { lightning = 1; sfx.thunder(); }
@@ -1379,6 +1405,8 @@ const CONFIG = {
     const bossTgt = bt < 0 ? 0 : bt < BOSS.emerge ? 0.75 * bt / BOSS.emerge : bt < BOSS.fight + BOSS.len ? 1 : bt < BOSS.fight + BOSS.len + 8 ? 1 - (bt - BOSS.fight - BOSS.len) / 8 : 0;
     bossVis += (bossTgt - bossVis) * Math.min(1, dt * 2.5);
     whiteFlash = Math.max(0, whiteFlash - dt * 1.4);
+    for (const bl of blasts) bl.life -= dt;
+    blasts = blasts.filter((bl) => bl.life > 0);
     if (!headless && state === 'play' && bt >= 1 && bt < BOSS.emerge && Math.random() < dt * 7) addPart({ type: 'bubble', x: rand(20, W - 20), y: viewTop + rand(H * 0.25, H * 0.8), vx: rand(-6, 6), vy: rand(-50, -25), size: rand(2, 6), life: 1.2, max: 1.2 });
 
     // gemi
@@ -1389,9 +1417,16 @@ const CONFIG = {
     }
     if (state === 'play' || state === 'attract') {
       const want = clamp((ship.targetX - ship.x) * 12, -MAXS, MAXS);
-      ship.vx += (want - ship.vx) * Math.min(1, dt * 14);
+      const resp = ship.pushT > 0 ? 3.5 : 14;                  // dalga vurunca dümen kısa süre tutmaz
+      ship.vx += (want - ship.vx) * Math.min(1, dt * resp);
       ship.x = clamp(ship.x + ship.vx * dt, 22, W - 22);
-      ship.y = shipY;
+      if (ship.pushT > 0) ship.pushT -= dt;
+      if (state === 'play' && (captainOn() || ship.y !== shipY)) {   // usta kaptanla ileri-geri
+        const wantV = clamp((ship.targetY - ship.y) * 10, -340, 340);
+        ship.vy += (wantV - ship.vy) * Math.min(1, dt * 12);
+        ship.y = clamp(ship.y + ship.vy * dt, Y_MIN, Y_MAX);
+        if (Math.abs(ship.y - shipY) < 0.01 && !captainOn()) { ship.y = shipY; ship.vy = 0; }
+      } else ship.y = shipY;
     } else if (state === 'docking') {
       dock.t += dt;
       const k = clamp(dock.t / 2.6, 0, 1), e = easeInOut(k);
@@ -1430,7 +1465,7 @@ const CONFIG = {
     // üretim
     if (state === 'play') {
       const D = diff(), endless = mode === 'endless';
-      const e = endless ? t - EV.start : -1e9, evEnd = EV.storm + EV.len;
+      const e = endless ? lodosE(t).e : -1e9, evEnd = EV.storm + EV.len;
       const bb = endless ? t - BOSS.start : -1e9;
       const noIce = (e >= -1 && e < evEnd + 1) || (bb >= -1 && bb < BOSS.back);          // lodos ve boss sırasında buzdağı yok
       const noRock = (e >= -3 && e < evEnd + 2) || (bb >= -3 && bb < BOSS.back + 1);     // normal kayalıklar da ara verir
@@ -1577,10 +1612,10 @@ const CONFIG = {
     for (const wk of wrecks) { wk.y += (flow + boostV) * dt; wk.bub -= dt; if (wk.bub <= 0) { wk.bub = 0.5 + Math.random(); addPart({ type: 'bubble', x: wk.x + rand(-14, 14), y: wk.y + rand(-20, 20), vx: 0, vy: -20, size: rand(2, 4), life: 0.8, max: 0.8 }); } }
     wrecks = wrecks.filter((wk) => wk.y < HW + 100);
     for (const sw of swells) {
-      const prevY = sw.y;
+      const prevD = sw.y - ship.y;
       sw.y += (flow * 1.25 + boostV) * dt;
-      if (!sw.hit && state === 'play' && prevY < ship.y && sw.y >= ship.y && !(ship.air > 0)) {
-        sw.hit = true; ship.vx += sw.dir * SWELL_PUSH;
+      if (!sw.hit && state === 'play' && prevD < 0 && sw.y - ship.y >= 0 && !(ship.air > 0)) {
+        sw.hit = true; ship.vx += sw.dir * SWELL_PUSH; ship.pushT = SWELL_DRIFT;
         splash(ship.x - sw.dir * 20, ship.y, 14);
         if (!headless) { sfx.swell(); shake = Math.max(shake, reduceMotion ? 0.05 : 0.2); }
       }
@@ -1658,20 +1693,21 @@ const CONFIG = {
     if (!headless) sfx.whale();
   }
   // ---------- Lodos etkinliği ----------
-  function runEvent(e) {
+  function runEvent(e, k = 0) {
+    if (k !== evK) { evK = k; evFlags = {}; }      // yeni lodos penceresi
     flowMul = 1 + stormK(e) * (FLOW_STORM + FLOW_RAMP * stormP(e));
     if (e < 0 || e > EV.storm + EV.len + EV.out + 2) return;
     if (!evFlags.clear) {
       // buzdağları yolu açar: kenarlara kayıp çekilirler, artık çarpmazlar
       evFlags.clear = true;
       for (const b of bergs) { b.clear = true; b.harmless = true; b.chaser = false; b.vx = (b.x < W / 2 ? -1 : 1) * 260; }
-      npc = { x: ship.x < W / 2 ? W - 92 : 92, y: -170 };
+      if (k === 0) npc = { x: ship.x < W / 2 ? W - 92 : 92, y: -170 };   // uyaran tekne sadece ilk lodosta gelir
     }
     if (npc) {
       npc.y = e < 2.2 ? -170 + 180 * e : e < 5.2 ? 226 + 22 * (e - 2.2) : 292 + 240 * (e - 5.2);
       if (npc.y > HW + 160) npc = null;
     }
-    if (!evFlags.talk && e >= 1.4) { evFlags.talk = true; if (!headless) sfx.talk(); }
+    if (!evFlags.talk && e >= 1.4 && k === 0) { evFlags.talk = true; if (!headless) sfx.talk(); }
     if (!evFlags.storm && e >= EV.storm) { evFlags.storm = true; banner = { text: 'LODOS!', sub: 'Dev dalgalar savurur, simitler batık gemilerde', life: 2.6, max: 2.6 }; if (!headless) sfx.storm(); }
     if (!evFlags.calm && e >= EV.storm + EV.len) { evFlags.calm = true; banner = { text: 'Lodos dindi', sub: 'Buzdağları geri geliyor', life: 2.2, max: 2.2 }; }
   }
@@ -1717,6 +1753,7 @@ const CONFIG = {
       if (!headless) { sfx.boom(); sfx.bossEnd(); }
     }
     if (!F.rescue && b >= BOSS.rescue) { F.rescue = true; rescue = { x: ship.x < W / 2 ? W - 92 : 92, y: -170, up: false }; }
+    if (rescue && !crew && b >= BOSS.rescue + 2.6) crew = { role: 'captain', swapT: t, boatX: rescue.x, joinT: t, fromX: rescue.x, nextT: 1e9 };
     if (rescue) {
       const r = b - BOSS.rescue;
       rescue.up = r >= 4.6;
@@ -1732,6 +1769,57 @@ const CONFIG = {
       }
       if (!F.horn && r >= 4.4) { F.horn = true; if (!headless) sfx.horn(); }
       if (rescue.up && rescue.y < -230) rescue = null;
+    }
+  }
+  // ---------- Mürettebat ----------
+  function runCrew() {
+    // 120. sn: Çapacı sudan çıkıp tekneye atlar (boss'a kadar katılabilir)
+    if (!crew && t >= CREW.join && t < BOSS.start + BOSS.rescue) {
+      crew = { role: 'anchor', joinT: t, fromX: ship.x < W / 2 ? ship.x + 70 : ship.x - 70, nextT: t + 2.4, swapT: 0, leftT: 0 };
+      splash(crew.fromX, ship.y + 10, 14);
+      banner = { text: 'Mürettebat geldi!', sub: 'Çapacı buzları parçalayacak', life: 2.4, max: 2.4 };
+      if (!headless) sfx.talk();
+    }
+    if (!crew) return;
+    // Çapacı: belli aralıklarla en yakın buzdağına çapa fırlatır; düştüğü yerde dairesel alan temizlenir
+    if (crew.role === 'anchor' && t < BOSS.start && t >= crew.nextT && !anchors.length) {
+      let best = null, bd = CREW.reach * CREW.reach;
+      for (const b of bergs) {
+        if (b.harmless || b.dead || b.clear || b.y < 0 || b.y > ship.y + 10) continue;
+        const dx = b.x - ship.x, dy = b.y - ship.y, d2 = dx * dx + dy * dy;
+        if (d2 < bd) { bd = d2; best = b; }
+      }
+      if (best) {
+        anchors.push({ sx: ship.x, sy: ship.y - 10, tx: best.x, ty: best.y, target: best, k: 0 });
+        crew.nextT = t + CREW.every;
+        if (!headless) sfx.anchor();
+      } else crew.nextT = t + 0.5;
+    }
+    for (const a of anchors) {
+      if (a.target && !a.target.dead) { a.tx = a.target.x; a.ty = a.target.y; }
+      a.k += STEP / CREW.fly;
+      if (a.k >= 1) {
+        a.done = true;
+        for (const b of bergs) {
+          if (b.dead || b.harmless) continue;
+          const dx = b.x - a.tx, dy = b.y - a.ty, rr2 = CREW.blast + b.r * 0.5;
+          if (dx * dx + dy * dy < rr2 * rr2) { b.dead = true; shatter(b); }
+        }
+        blasts.push({ x: a.tx, y: a.ty, life: 0.45 });
+        if (!headless) { sfx.anchorHit(); shake = Math.max(shake, reduceMotion ? 0.04 : 0.15); }
+      }
+    }
+    anchors = anchors.filter((a) => !a.done);
+    // Boss sonrası kurtarıcı teknede yer değiştirme: Çapacı tekneye, Usta Kaptan bize
+    const r = t - BOSS.start - BOSS.rescue;
+    if (crew.role === 'anchor' && rescue && r >= 2.6) {
+      crew.role = 'captain'; crew.swapT = t; crew.boatX = rescue.x; anchors = [];
+      if (!headless) sfx.talk();
+    }
+    if (crew.role === 'captain' && !crew.announced && t >= crew.swapT + 1.4) {
+      crew.announced = true; liveY = ship.y;
+      banner = { text: 'Usta Kaptan dümende!', sub: 'Artık ileri-geri de sürebilirsin', life: 2.8, max: 2.8 };
+      if (!headless) sfx.gain();
     }
   }
   function bossAttack(f, b0) {
@@ -2278,6 +2366,7 @@ const CONFIG = {
     ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(-6, -10, 4, 2);
     ctx.beginPath(); ctx.arc(0, 4, 3.2, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
     if (ship.hasBottle) drawBottleSmall(9, 16, 0.5, 0.95);
+    if (crewOnDeck()) drawCrewman(-9, 16, crew.role, 1);
     // ambar kapağı
     ctx.beginPath(); ctx.arc(0, 26, 5, 0, TAU); ctx.fillStyle = GOLD; ctx.fill(); ctx.lineWidth = 2.5; ctx.stroke();
     // pruva direği ve flama
@@ -2288,6 +2377,68 @@ const CONFIG = {
     ctx.restore();
   }
 
+  // ---------- Mürettebat çizimi ----------
+  const JUMP = 0.9;
+  function crewOnDeck() {
+    if (!crew || mode !== 'endless' || state === 'over') return false;
+    if (crew.role === 'anchor') return t >= crew.joinT + JUMP;
+    return t >= crew.swapT + 0.5 + JUMP;
+  }
+  // Tepeden görünen küçük denizci: çapacıda kırmızı bere + çapa, kaptanda beyaz kaptan şapkası
+  function drawCrewman(x, y, role, sc) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc);
+    ctx.lineWidth = 1.8; ctx.strokeStyle = INK;
+    ctx.beginPath(); ctx.ellipse(0, 3, 6, 4.5, 0, 0, TAU); ctx.fillStyle = role === 'anchor' ? '#2f6ea5' : '#1d3e66'; ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -1, 4.6, 0, TAU); ctx.fillStyle = '#f2c39b'; ctx.fill(); ctx.stroke();
+    if (role === 'anchor') { ctx.beginPath(); ctx.arc(0, -2, 4.4, PI, 0); ctx.fillStyle = RED; ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.ellipse(0, -2.5, 5.6, 4, 0, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke(); ctx.fillStyle = GOLD; ctx.beginPath(); ctx.arc(0, -3, 1.4, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawAnchorIcon(x, y, rot, sc) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sc, sc);
+    ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(0, 10); ctx.moveTo(-6, -5); ctx.lineTo(6, -5); ctx.arc(0, 2, 9, 0.15 * PI, 0.85 * PI); ctx.stroke();
+    ctx.strokeStyle = '#9aa7b2'; ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(0, 10); ctx.moveTo(-6, -5); ctx.lineTo(6, -5); ctx.arc(0, 2, 9, 0.15 * PI, 0.85 * PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -13, 3, 0, TAU); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.restore();
+  }
+  function jumpArc(x0, y0, x1, y1, k, role) {
+    const kk = clamp(k, 0, 1), x = lerp(x0, x1, kk), y = lerp(y0, y1, kk) - Math.sin(kk * PI) * 60;
+    ctx.fillStyle = 'rgba(10,40,70,0.25)'; ctx.beginPath(); ctx.ellipse(x, lerp(y0, y1, kk) + 6, 6, 3, 0, 0, TAU); ctx.fill();
+    drawCrewman(x, y, role, 1.3 + Math.sin(kk * PI) * 0.5);
+  }
+  function drawCrewFx() {
+    if (!crew || mode !== 'endless' || state === 'over') return;
+    // atlama animasyonları
+    if (crew.role === 'anchor' && t < crew.joinT + JUMP) jumpArc(crew.fromX, ship.y + 10, ship.x - 9, ship.y + 16, (t - crew.joinT) / JUMP, 'anchor');
+    if (crew.role === 'captain' && rescue) {
+      const k1 = (t - crew.swapT) / JUMP, k2 = (t - crew.swapT - 0.5) / JUMP;
+      if (k1 < 1) jumpArc(ship.x - 9, ship.y + 16, rescue.x, rescue.y, k1, 'anchor');
+      else drawCrewman(rescue.x + 8, rescue.y - 10, 'anchor', 1.1);     // tekneyle birlikte gidiyor
+      if (k2 >= 0 && k2 < 1) jumpArc(rescue.x, rescue.y, ship.x - 9, ship.y + 16, k2, 'captain');
+    }
+    // uçan çapalar ve halat
+    for (const a of anchors) {
+      const k = clamp(a.k, 0, 1), x = lerp(a.sx, a.tx, k), y = lerp(a.sy, a.ty, k) - Math.sin(k * PI) * 50;
+      ctx.strokeStyle = 'rgba(236,217,164,0.9)'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(ship.x - 9, ship.y + 10); ctx.quadraticCurveTo((ship.x + x) / 2, Math.min(ship.y, y) - 30, x, y); ctx.stroke(); ctx.setLineDash([]);
+      drawAnchorIcon(x, y, k * 9, 1.1);
+    }
+    // patlama halkası
+    for (const bl of blasts) {
+      const k = 1 - bl.life / 0.45;
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.9 * (1 - k)) + ')'; ctx.lineWidth = 5 * (1 - k) + 1;
+      ctx.beginPath(); ctx.arc(bl.x, bl.y, CREW.blast * (0.3 + 0.7 * k), 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(242,177,52,' + (0.7 * (1 - k)) + ')'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(bl.x, bl.y, CREW.blast * (0.15 + 0.6 * k), 0, TAU); ctx.stroke();
+    }
+    // kaptan geldikten sonra ileri-geri sınırını hafifçe göster
+    if (captainOn() && state === 'play') {
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 2; ctx.setLineDash([6, 8]);
+      ctx.beginPath(); ctx.moveTo(0, Y_MIN - 46); ctx.lineTo(W, Y_MIN - 46); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
   function drawParts() {
     for (const p of parts) {
       const a = clamp(p.life / p.max, 0, 1);
@@ -2357,6 +2508,7 @@ const CONFIG = {
     for (const wh of whales) drawWhale(wh);
     if (npc) drawNpc(npc);
     if (rescue) drawNpc(rescue);
+    drawCrewFx();
     if (ship.air > 0) drawShip();             // havadaki gemi her şeyin üstünde
     for (const bu of buoys) if (bu.air) drawBuoy(bu);
     const saved = parts; parts = parts.filter((p) => p.type !== 'foam'); drawParts(); parts = saved;
@@ -2679,34 +2831,36 @@ const CONFIG = {
   }
 
   // ---------- Oyun kaydı (tekrar kodu) ----------
-  // Biçim: LY5.<tohum>.<skor x10>.<adım sayısı>.<hareketler>
+  // Biçim: LY6.<tohum>.<skor x10>.<adım sayısı>.<hareketler>
+  // Her hareket: "adım farkı" + "±x farkı" [+ "±y farkı" (usta kaptan geldikten sonra ileri-geri)]
   // Hareketler: "adım farkı" + "+/-" + "x farkı" (36'lık tabanda), virgülle ayrılmış
   const scoreOf = (ticks) => Math.floor(ticks / 6) / 10;     // 60 adım = 1 sn, 0,1 sn hassasiyet
   function encodeRun(seed, ticks, tp) {
     const parts2 = [];
-    let lt = 0, lx = W / 2;
-    for (const [tk, x] of tp) {
-      const dv = x - lx;
-      parts2.push((tk - lt).toString(36) + (dv < 0 ? '-' : '+') + Math.abs(dv).toString(36));
-      lt = tk; lx = x;
+    let lt = 0, lx = W / 2, ly = shipY;
+    for (const [tk, x, y] of tp) {
+      const dv = x - lx, dy = y - ly;
+      parts2.push((tk - lt).toString(36) + (dv < 0 ? '-' : '+') + Math.abs(dv).toString(36) + (dy ? (dy < 0 ? '-' : '+') + Math.abs(dy).toString(36) : ''));
+      lt = tk; lx = x; ly = y;
     }
     return [GAME_VER, (seed >>> 0).toString(36), Math.round(scoreOf(ticks) * 10), ticks.toString(36), parts2.join(',')].join('.');
   }
   function decodeRun(code) {
     code = String(code || '').replace(/\s+/g, '');
-    const m = /^LY5\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(code);
+    const m = /^LY6\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(code);
     if (!m) return null;
     const seed = parseInt(m[1], 36), ticks = parseInt(m[3], 36);
     if (!(seed >= 0 && seed <= 4294967295) || !(ticks > 0)) return null;
     const tp = [];
-    let lt = 0, lx = W / 2;
+    let lt = 0, lx = W / 2, ly = shipY;
     if (m[4]) {
       for (const e of m[4].split(',')) {
-        const mm = /^([0-9a-z]+)([+-])([0-9a-z]+)$/.exec(e);
+        const mm = /^([0-9a-z]+)([+-])([0-9a-z]+)(?:([+-])([0-9a-z]+))?$/.exec(e);
         if (!mm) return null;
         lt += parseInt(mm[1], 36); lx += (mm[2] === '-' ? -1 : 1) * parseInt(mm[3], 36);
-        if (lx < 24 || lx > W - 24) return null;
-        tp.push([lt, lx]);
+        if (mm[4]) ly += (mm[4] === '-' ? -1 : 1) * parseInt(mm[5], 36);
+        if (lx < 24 || lx > W - 24 || ly < Y_MIN || ly > Y_MAX) return null;
+        tp.push([lt, lx, ly]);
       }
     }
     return { seed, claimed: Number(m[2]) / 10, ticks, tape: tp, code };
