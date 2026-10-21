@@ -560,19 +560,22 @@ const CONFIG = {
   const LANE_HW = 39, ERUPT_R = 48;   // üstten vuruş şeridinin yarı genişliği, alttan çıkış dairesinin yarıçapı
   let boss = null, bossVis = 0, bossAtkT = 0, rescue = null, hitsBoss = 0, whiteFlash = 0;
   // ===== Tekrarlayan lodos (boss'tan sonra, girişsiz) =====
-  // İki boss: 150. sn ve ilk bosstan 70 sn sonra (288. sn) daha hızlı/zorlu ikincisi
-  const BOSS_STARTS = [BOSS.start, BOSS.start + BOSS.back + 70];
+  // Sıra: 1. boss (150) → 70 sn → ara lodos (288) → 70 sn → 2. boss (394, daha hızlı/zorlu) → 60 sn → lodoslar (522'den itibaren)
+  const LODOS_LEN = EV.storm + EV.len + EV.out;                    // bir lodos ~39 sn sürer
+  const LODOS_MID = BOSS.start + BOSS.back + 70;                   // 288: iki boss arasındaki lodos
+  const BOSS_STARTS = [BOSS.start, LODOS_MID - 3 + LODOS_LEN + 70]; // 150 ve 394
   // gap: saldırılar arası süre (başta→sonda), warn: kırmızı uyarı süresi çarpanı, mixF: ağır saldırılara kaç sn önden başlar
   const BOSS_LV = [{ gap: [1.7, 0.95], warn: 1, mixF: 0 }, { gap: [1.15, 0.62], warn: 0.78, mixF: 12 }];
   function bossB(tt) { const n = tt >= BOSS_STARTS[1] - 10 ? 1 : 0; return { b: tt - BOSS_STARTS[n], n }; }
   let bossN = 0;
-  // 2. bosstan 60 sn sonra (416. sn) lodoslar başlar; her lodostan sonra 60 sn sakin deniz (lodos ~39 sn → her 99 sn'de bir)
-  const LODOS_REPEAT = { first: BOSS_STARTS[1] + BOSS.back + 60, every: EV.storm + EV.len + EV.out + 60, lead: 3 };
+  // 2. bosstan 60 sn sonra (522. sn) lodoslar başlar; her lodostan sonra 60 sn sakin deniz (her 99 sn'de bir)
+  const LODOS_REPEAT = { first: BOSS_STARTS[1] + BOSS.back + 60, every: LODOS_LEN + 60, lead: 3 };
   // Hangi lodos penceresindeyiz? k=0: 50. sn'deki ilk (tekneli) lodos, k>=1: tekrarlar
   function lodosE(tt) {
-    if (tt < LODOS_REPEAT.first - 10) return { e: tt - EV.start, k: 0 };
+    if (tt < LODOS_MID - 10) return { e: tt - EV.start, k: 0 };
+    if (tt < LODOS_REPEAT.first - 10) return { e: tt - LODOS_MID + LODOS_REPEAT.lead, k: 1 };   // iki boss arasındaki lodos
     const k = Math.floor((tt - LODOS_REPEAT.first + 10) / LODOS_REPEAT.every);
-    return { e: tt - (LODOS_REPEAT.first + k * LODOS_REPEAT.every) + LODOS_REPEAT.lead, k: k + 1 };
+    return { e: tt - (LODOS_REPEAT.first + k * LODOS_REPEAT.every) + LODOS_REPEAT.lead, k: k + 2 };
   }
   let evK = 0;
   // ===== Mürettebat: Çapacı (ilk lodostan hemen sonra, 90. sn, buz kırar) → boss sonrası Usta Kaptan (ileri-geri sürüş) =====
