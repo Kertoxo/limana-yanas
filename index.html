@@ -465,7 +465,7 @@ const CONFIG = {
   const randomSeed = () => { try { return crypto.getRandomValues(new Uint32Array(1))[0]; } catch (e) { return (Math.random() * 4294967296) >>> 0; } };
   G.seed(randomSeed());
   const STEP = 1 / 60;          // sabit fizik adımı
-  const GAME_VER = 'LY9';       // oyun kuralları değişirse artırılır (eski tekrar kodları o sürüme aittir)
+  const GAME_VER = 'LY10';       // oyun kuralları değişirse artırılır (eski tekrar kodları o sürüme aittir)
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   Object.freeze(CONFIG);
@@ -557,7 +557,7 @@ const CONFIG = {
   // b = t - BOSS.start. [0,15): ekran boşalır, deniz kararır; 15: flaşla sudan çıkar; [17,28): kükreme;
   // [28,58): 30 sn savaş; 58: flaşla dalar; [60,66): kurtarıcı tekne simit atar; 68: buzlar geri gelir.
   const BOSS = { start: 150, emerge: 15, fight: 28, len: 30, rescue: 60, back: 68 };
-  const LANE_HW = 39, ERUPT_R = 48;   // üstten vuruş şeridinin yarı genişliği, alttan çıkış dairesinin yarıçapı
+  const LANE_HW = 39, ERUPT_R = 48, ROW_HW = 40;   // ROW_HW: 2. bosstaki yatay vuruş şeridinin yarı yüksekliği   // üstten vuruş şeridinin yarı genişliği, alttan çıkış dairesinin yarıçapı
   let boss = null, bossVis = 0, bossAtkT = 0, rescue = null, hitsBoss = 0, whiteFlash = 0;
   // ===== Tekrarlayan lodos (boss'tan sonra, girişsiz) =====
   // Sıra: 1. boss (150) → 70 sn → ara lodos (288) → 70 sn → 2. boss (394, daha hızlı/zorlu) → 60 sn → lodoslar (522'den itibaren)
@@ -1794,8 +1794,9 @@ const CONFIG = {
       if (a.phase === 'act' && !a.struck) {
         a.struck = true;
         if (!headless) {
-          if (a.type === 'erupt') { sfx.erupt(); splash(a.x, a.y, 16); } else sfx.slam();
+          if (a.type === 'erupt') { sfx.erupt(); splash(a.x, a.y, 16); } else if (a.type === 'multi' && a.pts.length && !a.xs.length && !a.ys.length) sfx.erupt(); else sfx.slam();
           if (a.type === 'slam') for (const x of a.xs) splash(x, shipY, 12);
+          if (a.type === 'multi') { for (const x of a.xs) splash(x, ship.y, 10); for (const y of a.ys) splash(ship.x, y, 10); for (const q of a.pts) splash(q.x, q.y, 12); }
           shake = Math.max(shake, reduceMotion ? 0.05 : 0.25);
         }
       }
@@ -1878,6 +1879,7 @@ const CONFIG = {
     }
   }
   function bossAttack(f0, b0) {
+    if (bossN) { bossAttack2(f0 + BOSS_LV[1].mixF, b0, BOSS_LV[1].warn); return; }
     const lv = BOSS_LV[bossN], f = f0 + lv.mixF, wm = lv.warn;     // 2. boss: ağır saldırılar önden, uyarılar kısa
     const late = clamp(f / BOSS.len, 0, 1);
     const sweepOn = boss.atks.some((a) => a.type === 'sweep');
@@ -1899,8 +1901,57 @@ const CONFIG = {
     }
     if (!headless) sfx.warn();
   }
+  // 2. boss: gemi artık ileri-geri de gidebildiği için saldırılar bütün alanı (x ve y) hedefler.
+  // 'multi' saldırı: xs = üstten dikey şeritler, ys = yandan yatay şeritler, pts = alttan çıkış daireleri
+  function bossAttack2(f, b0, wm) {
+    const late = clamp((f - 12) / BOSS.len, 0, 1);
+    const sweepOn = boss.atks.some((a) => a.type === 'sweep');
+    const sy = (d) => clamp(ship.y + d, Y_MIN, Y_MAX);
+    const lane = () => clamp(ship.x + grand(-20, 20), LANE_HW, W - LANE_HW);
+    const r = G.next();
+    let type;
+    if (sweepOn) type = 'aim';
+    else if (f < 20) type = r < 0.3 ? 'aim' : r < 0.6 ? 'row' : r < 0.8 ? 'slam' : 'cross';
+    else if (f < 30) type = r < 0.2 ? 'aim' : r < 0.4 ? 'row' : r < 0.65 ? 'cross' : r < 0.85 ? 'scatter' : 'double';
+    else type = r < 0.15 ? 'aim' : r < 0.4 ? 'cross' : r < 0.65 ? 'scatter' : r < 0.85 ? 'rows' : 'sweep';
+    const a = { type: 'multi', xs: [], ys: [], pts: [], side: G.next() < 0.5 ? -1 : 1, b0, warn: lerp(0.95, 0.8, late) * wm, act: 0.5 };
+    if (type === 'aim') a.pts.push({ x: clamp(ship.x + grand(-25, 25), 50, W - 50), y: sy(grand(-25, 25)) });
+    else if (type === 'row') a.ys.push(sy(grand(-15, 15)));
+    else if (type === 'slam') a.xs.push(lane());
+    else if (type === 'double') a.xs.push(grand(45, 165), grand(235, 355));
+    else if (type === 'cross') { a.xs.push(lane()); a.ys.push(sy(grand(-15, 15))); a.warn *= 1.12; }
+    else if (type === 'rows') {
+      const y1 = sy(grand(-15, 15));
+      let y2 = grand(Y_MIN, Y_MAX);
+      if (Math.abs(y2 - y1) < 150) y2 = y1 < (Y_MIN + Y_MAX) / 2 ? Math.min(Y_MAX, y1 + 150 + grand(0, 60)) : Math.max(Y_MIN, y1 - 150 - grand(0, 60));
+      a.ys.push(y1, y2);
+    } else if (type === 'scatter') {
+      a.pts.push({ x: clamp(ship.x + grand(-20, 20), 50, W - 50), y: sy(grand(-20, 20)) });
+      for (let i = 0; i < 3; i++) {
+        let p = null;
+        for (let tries = 0; tries < 8; tries++) {
+          p = { x: grand(55, W - 55), y: grand(Y_MIN - 10, Y_MAX) };
+          if (a.pts.every((q) => (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y) > 120 * 120)) break;
+        }
+        a.pts.push(p);
+      }
+      a.warn *= 1.08;
+    } else {
+      boss.atks.push({ type: 'sweep', side: ship.x < W / 2 ? -1 : 1, y: ship.y, b0, warn: 1.0 * wm / 0.78 * 0.85, act: 0.5 });
+      if (!headless) sfx.warn();
+      return;
+    }
+    boss.atks.push(a);
+    if (!headless) sfx.warn();
+  }
   function atkHits(a) {
     for (const h of hullPoints()) {
+      if (a.type === 'multi') {
+        for (const x of a.xs) if (Math.abs(h.x - x) < LANE_HW + h.r * 0.6) return true;
+        for (const y of a.ys) if (Math.abs(h.y - y) < ROW_HW + h.r * 0.6) return true;
+        for (const q of a.pts) { const dx = h.x - q.x, dy = h.y - q.y, rr2 = ERUPT_R + h.r * 0.7; if (dx * dx + dy * dy < rr2 * rr2) return true; }
+        continue;
+      }
       if (a.type === 'slam') { for (const x of a.xs) if (Math.abs(h.x - x) < LANE_HW + h.r * 0.6) return true; }
       else if (a.type === 'erupt') { const dx = h.x - a.x, dy = h.y - a.y, rr2 = ERUPT_R + h.r * 0.7; if (dx * dx + dy * dy < rr2 * rr2) return true; }
       else if (a.type === 'sweep') { if (a.side < 0 ? h.x - h.r * 0.5 < W / 2 : h.x + h.r * 0.5 > W / 2) return true; }
@@ -2825,7 +2876,15 @@ const CONFIG = {
         else if (a.type === 'erupt') {
           hatch(() => { ctx.beginPath(); ctx.arc(a.x, a.y, ERUPT_R, 0, TAU); }, k);
           ctx.strokeStyle = 'rgba(255,230,230,0.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(a.x, a.y, ERUPT_R * (1 - k) + 6, 0, TAU); ctx.stroke();
-        } else hatch(() => { ctx.beginPath(); ctx.rect(a.side < 0 ? -10 : W / 2, shipY - 75, W / 2 + 10, 160); }, k);
+        } else if (a.type === 'multi') {
+          for (const x of a.xs) hatch(() => { ctx.beginPath(); ctx.rect(x - LANE_HW, viewTop - 10, LANE_HW * 2, H + 20); }, k);
+          for (const y of a.ys) hatch(() => { ctx.beginPath(); ctx.rect(-10, y - ROW_HW, W + 20, ROW_HW * 2); }, k);
+          for (const q of a.pts) {
+            hatch(() => { ctx.beginPath(); ctx.arc(q.x, q.y, ERUPT_R, 0, TAU); }, k);
+            ctx.strokeStyle = 'rgba(255,230,230,0.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(q.x, q.y, ERUPT_R * (1 - k) + 6, 0, TAU); ctx.stroke();
+          }
+        } else if (bossN) hatch(() => { ctx.beginPath(); ctx.rect(a.side < 0 ? -10 : W / 2, viewTop - 10, W / 2 + 10, H + 20); }, k);   // 2. boss: yarının tamamı
+        else hatch(() => { ctx.beginPath(); ctx.rect(a.side < 0 ? -10 : W / 2, shipY - 75, W / 2 + 10, 160); }, k);
         continue;
       }
       const ext = a.phase === 'act' ? clamp((age - a.warn) / 0.1, 0, 1) : clamp(1 - (age - a.warn - a.act) / 0.35, 0, 1);
@@ -2840,8 +2899,23 @@ const CONFIG = {
         ctx.fillStyle = 'rgba(5,20,25,0.6)'; ctx.beginPath(); ctx.arc(a.x, a.y, ERUPT_R - 8, 0, TAU); ctx.fill();
         const curl = Math.sin(clock * 10) * 10;
         tentacle(a.x - 8, a.y + 30, a.x + 34, a.y - 10 * ext, a.x - 6 + curl, a.y - 95 * ext, 54, 14, BOSS_BODY, true);
+      } else if (a.type === 'multi') {
+        for (const q of a.pts) {
+          ctx.fillStyle = 'rgba(235,248,255,0.7)'; ctx.beginPath(); ctx.arc(q.x, q.y, ERUPT_R + 6, 0, TAU); ctx.fill();
+          ctx.fillStyle = 'rgba(5,20,25,0.6)'; ctx.beginPath(); ctx.arc(q.x, q.y, ERUPT_R - 8, 0, TAU); ctx.fill();
+          const curl = Math.sin(clock * 10 + q.x) * 10;
+          tentacle(q.x - 8, q.y + 30, q.x + 34, q.y - 10 * ext, q.x - 6 + curl, q.y - 95 * ext, 54, 14, BOSS_BODY, true);
+        }
+        for (const y of a.ys) {
+          const edge = a.side < 0 ? -40 : W + 40, far = a.side < 0 ? W + 40 : -40, tip = lerp(edge, far, ext), wy = y + Math.sin(clock * 9 + y) * 6;
+          tentacle(edge, wy + 18, (edge + tip) / 2, wy - 22, tip, wy, 72, 40, BOSS_BODY, true);
+        }
+        for (const x of a.xs) {
+          const top = viewTop - 40, tipY = lerp(top, viewTop + H + 40, ext), wig = Math.sin(clock * 12 + x) * 8;
+          tentacle(x, top, x + wig, (top + tipY) / 2, x - wig * 0.5, tipY, 70, 46, BOSS_BODY, true);
+        }
       } else {
-        const edge = a.side < 0 ? -40 : W + 40, tip = lerp(edge, W / 2 - a.side * 14, ext), wy = shipY + Math.sin(clock * 9) * 10;
+        const edge = a.side < 0 ? -40 : W + 40, tip = lerp(edge, W / 2 - a.side * 14, ext), wy = (a.y !== undefined ? a.y : shipY) + Math.sin(clock * 9) * 10;
         tentacle(edge, wy + 20, (edge + tip) / 2, wy - 30, tip, wy, 92, 50, BOSS_BODY, true);
       }
     }
@@ -2887,7 +2961,7 @@ const CONFIG = {
   }
 
   // ---------- Oyun kaydı (tekrar kodu) ----------
-  // Biçim: LY9.<tohum>.<skor x10>.<adım sayısı>.<hareketler>
+  // Biçim: LY10.<tohum>.<skor x10>.<adım sayısı>.<hareketler>
   // Her hareket: "adım farkı" + "±x farkı" [+ "±y farkı" (usta kaptan geldikten sonra ileri-geri)]
   // Hareketler: "adım farkı" + "+/-" + "x farkı" (36'lık tabanda), virgülle ayrılmış
   const scoreOf = (ticks) => Math.floor(ticks / 6) / 10;     // 60 adım = 1 sn, 0,1 sn hassasiyet
@@ -2903,7 +2977,7 @@ const CONFIG = {
   }
   function decodeRun(code) {
     code = String(code || '').replace(/\s+/g, '');
-    const m = /^LY9\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(code);
+    const m = /^LY10\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(code);
     if (!m) return null;
     const seed = parseInt(m[1], 36), ticks = parseInt(m[3], 36);
     if (!(seed >= 0 && seed <= 4294967295) || !(ticks > 0)) return null;
@@ -2954,7 +3028,7 @@ const CONFIG = {
   function readCode() {
     const rep = decodeRun(repIn.value);
     const raw = String(repIn.value || '').replace(/\s+/g, '');
-    const OLD = { LY7: 'eski/', LY8: 'eski/ly8/' };     // eski kurallarla oynanmış oyunlar o sürümün dondurulmuş kopyasında doğrulanır
+    const OLD = { LY7: 'eski/', LY8: 'eski/ly8/', LY9: 'eski/ly9/' };     // eski kurallarla oynanmış oyunlar o sürümün dondurulmuş kopyasında doğrulanır
     const ov = (/^(LY[0-9]+)\./.exec(raw) || [])[1];
     if (!rep && OLD[ov]) {
       const href = new URL(OLD[ov] + '#tekrar', location.href).href;
