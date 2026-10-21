@@ -40,11 +40,11 @@ const SHEET_BEST = 'Sıralama';
 const SHEET_LOG = 'Tüm Oyunlar';
 const LOG_HEADERS = ['Zaman', 'Cihaz', 'Ad', 'Soyad', 'Skor (sn)', 'Gerçek süre (sn)', 'Hareket sayısı'];
 const MAX_SCORE = 3600;           // 1 saatten uzun skor kabul edilmez
-const GAME_VER = 'LY9';           // oyundaki GAME_VER ile aynı olmalı
-// Geçiş: bir önceki sürüm (LY8) sadece bu andan ÖNCE alınmış biletlerle kabul edilir
+const GAME_VER = 'LY10';           // oyundaki GAME_VER ile aynı olmalı
+// Geçiş: bir önceki sürüm (LY9) sadece bu andan ÖNCE alınmış biletlerle kabul edilir
 // (güncelleme sırasında eski sayfası açık kalan oyuncular skorunu kaybetmesin; biletler 8 saatte zaten geçersizleşir)
-const OLD_VER = 'LY8';
-const OLD_VER_UNTIL = Date.parse('2026-10-21T19:45:00Z');   // 22:45 Türkiye saati
+const OLD_VER = 'LY9';
+const OLD_VER_UNTIL = Date.parse('2026-10-21T20:15:00Z');   // 23:15 Türkiye saati
 const CHUNK = 45000;              // bir hücreye yazılacak en fazla karakter (Sheets sınırı 50.000)
 const MAX_CHUNKS = 12;            // tekrar kodu için ayrılan sütun sayısı
 const TOKEN_TTL = 8 * 3600;       // bilet ömrü: 8 saat (saniye)
@@ -117,7 +117,7 @@ function readToken_(token) {
   return { t: t, s: sd, sig: m[4] };
 }
 
-// Tekrar kodunu çözer: LY9.<tohum36>.<skor x10>.<adım36>.<hareketler>
+// Tekrar kodunu çözer: LY10.<tohum36>.<skor x10>.<adım36>.<hareketler>
 function parseReplay_(code) {
   const m = /^(LY[0-9]{1,2})\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(String(code || ''));
   if (!m || (m[1] !== GAME_VER && m[1] !== OLD_VER)) return null;
