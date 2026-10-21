@@ -206,6 +206,7 @@ body { height: 100%; margin: 0; background: var(--navy); color: var(--ink); font
 .replay-res b { font: 800 18px/1.1 var(--f-display); }
 .replay-res b.good { color: #1f7a45; }
 .replay-res b.bad { color: var(--red); }
+.replay-res a { color: var(--navy); font-weight: 800; text-decoration: underline; }
 #replayBar {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3;
   display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 14px;
@@ -418,7 +419,7 @@ const CONFIG = {
   PRIZE_TEXT: "Kazanan İTÜ GMK Instagram hesabından duyurulur. 1. kulübe ulaşmazsa ödül sırayla 2. ve 3.'ye geçer.",
   SEASON_END: "",                // örn. "31 Ekim 2026" — yazılırsa sıralama ekranında kapanış tarihi görünür
 
-  // --- Boss (Cthulhu, 190. sn) giriş müziği (isteğe bağlı) ---
+  // --- Boss (Cthulhu, 150. sn) giriş müziği (isteğe bağlı) ---
   // Boş bırakılırsa oyunun kendi orijinal giriş müziği çalar. Telif hakkı size ait ya da izinli bir dosya kullanın;
   // dosyayı index.html ile aynı klasöre koyup adını yazın (ör. "boss.mp3").
   BOSS_MUSIC_URL: "",
@@ -464,7 +465,7 @@ const CONFIG = {
   const randomSeed = () => { try { return crypto.getRandomValues(new Uint32Array(1))[0]; } catch (e) { return (Math.random() * 4294967296) >>> 0; } };
   G.seed(randomSeed());
   const STEP = 1 / 60;          // sabit fizik adımı
-  const GAME_VER = 'LY7';       // oyun kuralları değişirse artırılır (eski tekrar kodları o sürüme aittir)
+  const GAME_VER = 'LY8';       // oyun kuralları değişirse artırılır (eski tekrar kodları o sürüme aittir)
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   Object.freeze(CONFIG);
@@ -518,8 +519,13 @@ const CONFIG = {
   const HW = 800;             // oyun dünyasının yüksekliği (her ekranda aynı)
   let H = 800, viewTop = 0, scale = 1, dpr = 1;   // H: ekranda görünen yükseklik, viewTop: görünen alanın üstü
   const shipY = HW - 115;
+  const BOTTOM_PAD = 110;     // ekranın altı dünyanın HW sınırından en fazla bu kadar aşağıyı gösterebilir
+  let camLift = 0;
+  const BOAT_DY = 60;         // uyaran/kurtarıcı tekneler biraz daha aşağıda durur (konuşma balonu üst göstergelerin altında kalmasın)
   const SPAWN_TOP = -110;     // buzdağları ekranın üstünde, görünmeden doğar
-  const MAXS = 430;           // geminin en yüksek yatay hızı
+  const MAXS = 540;           // geminin en yüksek yatay hızı (LY8: 430 → 540)
+  const STEER_GAIN = 15;      // hedefe ne kadar sert yöneldiği (LY8: 12 → 15)
+  const STEER_RESP = 18;      // dümenin tepki hızı (LY8: 14 → 18)
   const SLIP_W = 60, SLIP_D = 62;
   const STAND_X = W - 92;                              // kıyıdaki stand
   const HAND = { toss: 0.9, land: 1.6, card: 2.3 };   // şişe teslim zamanlaması (yanaştıktan sonra, sn)
@@ -540,30 +546,30 @@ const CONFIG = {
   // ===== Lodos etkinliği (sınırsız mod) =====
   // e = t - EV.start. e∈[0, 4.5): buzlar yolu açar, tekne gelip uyarır; [4.5, 6): deniz kararır;
   // [6, 26): 20 sn fırtına (sadece kayalık, simitler batık gemilerde); [26, 29): fırtına diner, buzlar döner.
-  const EV = { start: 80, talk: 4.5, storm: 6, len: 30, out: 3 };
+  const EV = { start: 50, talk: 4.5, storm: 6, len: 30, out: 3 };
   const FLOW_STORM = 0.9;     // fırtına başında deniz %90 daha hızlı akar...
-  const LODOS1_END = 116;    // ilk lodosun bittiği an (EV.start + EV.storm + EV.len)
+  const LODOS1_END = EV.start + EV.storm + EV.len;    // ilk lodosun bittiği an (86. sn)
   const FLOW_RAMP = 0.5;      // ...ve fırtına boyunca %50 daha hızlanır (sonunda ~2,4 kat)
   const SWELL_PUSH = 1000;    // dev dalganın gemiye verdiği yan itiş
   const SWELL_DRIFT = 0.4;    // itişten sonra dümenin kısa süre tutmadığı süre (sn): gemi daha uzağa savrulur
   let swells = [], swellT = 0;
-  // ===== Cthulhu (sınırsız mod, 190. sn) =====
+  // ===== Cthulhu (sınırsız mod, 150. sn) =====
   // b = t - BOSS.start. [0,15): ekran boşalır, deniz kararır; 15: flaşla sudan çıkar; [17,28): kükreme;
   // [28,58): 30 sn savaş; 58: flaşla dalar; [60,66): kurtarıcı tekne simit atar; 68: buzlar geri gelir.
-  const BOSS = { start: 190, emerge: 15, fight: 28, len: 30, rescue: 60, back: 68 };
+  const BOSS = { start: 150, emerge: 15, fight: 28, len: 30, rescue: 60, back: 68 };
   const LANE_HW = 39, ERUPT_R = 48;   // üstten vuruş şeridinin yarı genişliği, alttan çıkış dairesinin yarıçapı
   let boss = null, bossVis = 0, bossAtkT = 0, rescue = null, hitsBoss = 0, whiteFlash = 0;
   // ===== Tekrarlayan lodos (boss'tan sonra, girişsiz) =====
-  const LODOS_REPEAT = { first: 338, every: 80, lead: 3 };
-  // Hangi lodos penceresindeyiz? k=0: 80. sn'deki ilk (tekneli) lodos, k>=1: tekrarlar
+  const LODOS_REPEAT = { first: BOSS.start + BOSS.back + 50, every: 50, lead: 3 };   // bosstan 50 sn sonra (268. sn), sonra her 50 sn
+  // Hangi lodos penceresindeyiz? k=0: 50. sn'deki ilk (tekneli) lodos, k>=1: tekrarlar
   function lodosE(tt) {
     if (tt < LODOS_REPEAT.first - 10) return { e: tt - EV.start, k: 0 };
     const k = Math.floor((tt - LODOS_REPEAT.first + 10) / LODOS_REPEAT.every);
     return { e: tt - (LODOS_REPEAT.first + k * LODOS_REPEAT.every) + LODOS_REPEAT.lead, k: k + 1 };
   }
   let evK = 0;
-  // ===== Mürettebat: Çapacı (120. sn, buz kırar) → boss sonrası Usta Kaptan (ileri-geri sürüş) =====
-  const CREW = { join: 120, every: 4.5, fly: 0.35, blast: 78, reach: 430 };
+  // ===== Mürettebat: Çapacı (ilk lodostan hemen sonra, 90. sn, buz kırar) → boss sonrası Usta Kaptan (ileri-geri sürüş) =====
+  const CREW = { join: LODOS1_END + 4, every: 4.5, fly: 0.35, blast: 78, reach: 430 };
   const Y_MIN = shipY - 300, Y_MAX = shipY + 40;   // usta kaptanla gidilebilecek ileri/geri sınırları
   let crew = null, liveY = shipY, anchors = [], blasts = [];
   const captainOn = () => !!(crew && crew.role === 'captain' && t >= crew.swapT + 1.4);
@@ -595,7 +601,10 @@ const CONFIG = {
     frame.style.width = w + 'px';
     scale = w / W;
     H = sh / scale;
-    viewTop = HW - H;           // uzun ekranda üstte biraz fazla deniz görünür, kısa ekranda üst kırpılır
+    // Kamera: gemi ekranın alttan ~%23'ünde dursun (mobilde başparmak gemiyi kapatmasın).
+    // Sadece görüntüyü kaydırır; oyun dünyası ve tekrar kayıtları her cihazda aynı kalır.
+    camLift = clamp(Math.round(H * 0.23) - (HW - shipY), 0, BOTTOM_PAD - 10);
+    viewTop = HW - H + camLift;
     dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     cv.width = Math.round(w * dpr);
     cv.height = Math.round(sh * dpr);
@@ -1155,6 +1164,7 @@ const CONFIG = {
     if (!headless) sfx.bossEnd();
     ship.x = ship.targetX = W / 2; ship.vx = 0; ship.tilt = 0; ship.sink = 0; ship.y = shipY; ship.hasBottle = false;
     pier.active = false; pier.k = 0; pier.y = -150;
+    pier.target = 240 + camLift;     // liman (sadece hikâye modu, kayda girmez): kamera kaydıysa stant üst göstergelerin altında kalmasın
     lastShownSec = -1;
     tick = 0; tape = []; tapeIdx = 0; lastInTick = -99; liveX = W / 2;
     recording = mode === 'endless' && !replay;
@@ -1450,8 +1460,8 @@ const CONFIG = {
       ship.targetX = liveX;
     }
     if (state === 'play' || state === 'attract') {
-      const want = clamp((ship.targetX - ship.x) * 12, -MAXS, MAXS);
-      const resp = ship.pushT > 0 ? 3.5 : 14;                  // dalga vurunca dümen kısa süre tutmaz
+      const want = clamp((ship.targetX - ship.x) * STEER_GAIN, -MAXS, MAXS);
+      const resp = ship.pushT > 0 ? 3.5 : STEER_RESP;                  // dalga vurunca dümen kısa süre tutmaz
       ship.vx += (want - ship.vx) * Math.min(1, dt * resp);
       ship.x = clamp(ship.x + ship.vx * dt, 22, W - 22);
       if (ship.pushT > 0) ship.pushT -= dt;
@@ -1582,7 +1592,7 @@ const CONFIG = {
       if (b.blinking > 0) b.blinking -= dt;
       if (state === 'docking' || state === 'docked' || state === 'won' || state === 'sinking') { b.harmless = true; }
       if (state === 'docking' || state === 'docked' || state === 'won') b.fade -= dt * 1.4;
-      if (b.y > HW + b.r + 12) { b.dead = true; if (!b.harmless && state === 'play') dodged++; }
+      if (b.y > HW + BOTTOM_PAD + b.r + 12) { b.dead = true; if (!b.harmless && state === 'play') dodged++; }
       if (b.y < -HW || b.fade <= 0) b.dead = true;
     }
     bergs = bergs.filter((b) => !b.dead);
@@ -1607,7 +1617,7 @@ const CONFIG = {
         }
       }
     }
-    rocks = rocks.filter((rk) => rk.y < HW + 90 && (rk.fade === undefined || rk.fade > 0));
+    rocks = rocks.filter((rk) => rk.y < HW + BOTTOM_PAD + 90 && (rk.fade === undefined || rk.fade > 0));
 
     // can simitleri
     for (const bu of buoys) {
@@ -1624,7 +1634,7 @@ const CONFIG = {
         bu.y += drift; bu.rot += dt * 0.6;
         if (pier.active && bu.y < pier.y + 24) bu.y = pier.y + 24;
       }
-      if (bu.y > HW + 30) bu.dead = true;
+      if (bu.y > HW + BOTTOM_PAD + 30) bu.dead = true;
       if (state === 'docking' || state === 'docked' || state === 'won') bu.fade = (bu.fade ?? 1) - dt * 1.5;
       if (bu.fade !== undefined && bu.fade <= 0) bu.dead = true;
     }
@@ -1642,9 +1652,9 @@ const CONFIG = {
         for (let i = 0; i < 7; i++) addPart({ type: 'splash', x: wh.x + rand(-4, 4), y: wh.y - 34, vx: rand(-40, 40), vy: rand(-110, -50), size: rand(3, 6), life: 0.7, max: 0.7 });
       }
     }
-    whales = whales.filter((wh) => wh.y < HW + 160 && wh.fade > 0);
+    whales = whales.filter((wh) => wh.y < HW + BOTTOM_PAD + 160 && wh.fade > 0);
     for (const wk of wrecks) { wk.y += (flow + boostV) * dt; wk.bub -= dt; if (wk.bub <= 0) { wk.bub = 0.5 + Math.random(); addPart({ type: 'bubble', x: wk.x + rand(-14, 14), y: wk.y + rand(-20, 20), vx: 0, vy: -20, size: rand(2, 4), life: 0.8, max: 0.8 }); } }
-    wrecks = wrecks.filter((wk) => wk.y < HW + 100);
+    wrecks = wrecks.filter((wk) => wk.y < HW + BOTTOM_PAD + 100);
     for (const sw of swells) {
       const prevD = sw.y - ship.y;
       sw.y += (flow * 1.25 + boostV) * dt;
@@ -1654,7 +1664,7 @@ const CONFIG = {
         if (!headless) { sfx.swell(); shake = Math.max(shake, reduceMotion ? 0.05 : 0.2); }
       }
     }
-    swells = swells.filter((sw) => sw.y < HW + 60);
+    swells = swells.filter((sw) => sw.y < HW + BOTTOM_PAD + 60);
     if (state === 'play' && !(ship.air > 0)) checkWhales();
 
     if (state === 'play') checkCollisions();
@@ -1738,8 +1748,8 @@ const CONFIG = {
       if (k === 0) npc = { x: ship.x < W / 2 ? W - 92 : 92, y: -170 };   // uyaran tekne sadece ilk lodosta gelir
     }
     if (npc) {
-      npc.y = e < 2.2 ? -170 + 180 * e : e < 5.2 ? 226 + 22 * (e - 2.2) : 292 + 240 * (e - 5.2);
-      if (npc.y > HW + 160) npc = null;
+      npc.y = e < 2.2 ? -170 + (180 + BOAT_DY / 2.2) * e : e < 5.2 ? 226 + BOAT_DY + 22 * (e - 2.2) : 292 + BOAT_DY + 240 * (e - 5.2);
+      if (npc.y > HW + BOTTOM_PAD + 160) npc = null;
     }
     if (!evFlags.talk && e >= 1.4 && k === 0) { evFlags.talk = true; if (!headless) sfx.talk(); }
     if (!evFlags.storm && e >= EV.storm) { evFlags.storm = true; banner = { text: 'LODOS!', sub: 'Dev dalgalar savurur, simitler batık gemilerde', life: 2.6, max: 2.6 }; if (!headless) sfx.storm(); }
@@ -1791,7 +1801,7 @@ const CONFIG = {
     if (rescue) {
       const r = b - BOSS.rescue;
       rescue.up = r >= 4.6;
-      rescue.y = r < 2.2 ? -170 + 180 * r : r < 4.6 ? 226 + 20 * (r - 2.2) : 274 - 320 * (r - 4.6);
+      rescue.y = r < 2.2 ? -170 + (180 + BOAT_DY / 2.2) * r : r < 4.6 ? 226 + BOAT_DY + 20 * (r - 2.2) : 274 + BOAT_DY - 320 * (r - 4.6);
       if (!F.thrown && r >= 1.6) {
         F.thrown = true;
         // simitleri geminin rotasına (aynı hizaya) atar
@@ -2810,7 +2820,7 @@ const CONFIG = {
       if (ext <= 0) continue;
       if (a.type === 'slam') {
         for (const x of a.xs) {
-          const top = viewTop - 40, tipY = lerp(top, HW + 40, ext), wig = Math.sin(clock * 12 + x) * 8;
+          const top = viewTop - 40, tipY = lerp(top, viewTop + H + 40, ext), wig = Math.sin(clock * 12 + x) * 8;
           tentacle(x, top, x + wig, (top + tipY) / 2, x - wig * 0.5, tipY, 70, 46, BOSS_BODY, true);
         }
       } else if (a.type === 'erupt') {
@@ -2865,7 +2875,7 @@ const CONFIG = {
   }
 
   // ---------- Oyun kaydı (tekrar kodu) ----------
-  // Biçim: LY7.<tohum>.<skor x10>.<adım sayısı>.<hareketler>
+  // Biçim: LY8.<tohum>.<skor x10>.<adım sayısı>.<hareketler>
   // Her hareket: "adım farkı" + "±x farkı" [+ "±y farkı" (usta kaptan geldikten sonra ileri-geri)]
   // Hareketler: "adım farkı" + "+/-" + "x farkı" (36'lık tabanda), virgülle ayrılmış
   const scoreOf = (ticks) => Math.floor(ticks / 6) / 10;     // 60 adım = 1 sn, 0,1 sn hassasiyet
@@ -2881,7 +2891,7 @@ const CONFIG = {
   }
   function decodeRun(code) {
     code = String(code || '').replace(/\s+/g, '');
-    const m = /^LY7\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(code);
+    const m = /^LY8\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(code);
     if (!m) return null;
     const seed = parseInt(m[1], 36), ticks = parseInt(m[3], 36);
     if (!(seed >= 0 && seed <= 4294967295) || !(ticks > 0)) return null;
@@ -2931,6 +2941,16 @@ const CONFIG = {
   }
   function readCode() {
     const rep = decodeRun(repIn.value);
+    const raw = String(repIn.value || '').replace(/\s+/g, '');
+    if (!rep && /^LY7\./.test(raw)) {
+      // 21 Ekim 2026'dan önceki kurallarla oynanmış oyun: o sürümün dondurulmuş kopyasında doğrulanır
+      const href = new URL('eski/#tekrar', location.href).href;
+      repRes.innerHTML = '<b class="bad">Eski sürüm kodu (LY7)</b><span>Bu oyun, olay zamanları değişmeden önceki sürümle oynanmış. '
+        + 'Doğrulamak için <a target="_blank" rel="noopener" href="' + href.replace(/"/g, '%22') + '">eski sürüm sayfasını</a> aç ve kodu oraya yapıştır.</span>';
+      repRes.hidden = false;
+      try { if (navigator.clipboard) navigator.clipboard.writeText(raw).catch(() => {}); } catch (e) {}
+      return null;
+    }
     if (!rep) { repRes.innerHTML = '<b class="bad">Kod okunamadı</b><span>Tablodaki "Tekrar kodu" hücrelerinin hepsini eksiksiz kopyaladığından emin ol.</span>'; repRes.hidden = false; }
     return rep;
   }
