@@ -560,7 +560,8 @@ const CONFIG = {
   const LANE_HW = 39, ERUPT_R = 48;   // üstten vuruş şeridinin yarı genişliği, alttan çıkış dairesinin yarıçapı
   let boss = null, bossVis = 0, bossAtkT = 0, rescue = null, hitsBoss = 0, whiteFlash = 0;
   // ===== Tekrarlayan lodos (boss'tan sonra, girişsiz) =====
-  const LODOS_REPEAT = { first: BOSS.start + BOSS.back + 50, every: 50, lead: 3 };   // bosstan 50 sn sonra (268. sn), sonra her 50 sn
+  // bosstan 50 sn sonra (268. sn) ilk tekrar; sonra her lodostan sonra 50 sn sakin deniz (lodos ~39 sn sürer → her 89 sn'de bir)
+  const LODOS_REPEAT = { first: BOSS.start + BOSS.back + 50, every: EV.storm + EV.len + EV.out + 50, lead: 3 };
   // Hangi lodos penceresindeyiz? k=0: 50. sn'deki ilk (tekneli) lodos, k>=1: tekrarlar
   function lodosE(tt) {
     if (tt < LODOS_REPEAT.first - 10) return { e: tt - EV.start, k: 0 };
