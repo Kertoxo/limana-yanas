@@ -40,7 +40,11 @@ const SHEET_BEST = 'Sıralama';
 const SHEET_LOG = 'Tüm Oyunlar';
 const LOG_HEADERS = ['Zaman', 'Cihaz', 'Ad', 'Soyad', 'Skor (sn)', 'Gerçek süre (sn)', 'Hareket sayısı'];
 const MAX_SCORE = 3600;           // 1 saatten uzun skor kabul edilmez
-const GAME_VER = 'LY7';           // oyundaki GAME_VER ile aynı olmalı
+const GAME_VER = 'LY8';           // oyundaki GAME_VER ile aynı olmalı
+// Geçiş: LY7 (21 Ekim 2026 öncesi kurallar) sadece bu andan ÖNCE alınmış biletlerle kabul edilir
+// (güncelleme sırasında eski sayfası açık kalan oyuncular skorunu kaybetmesin; biletler 8 saatte zaten geçersizleşir)
+const OLD_VER = 'LY7';
+const OLD_VER_UNTIL = Date.parse('2026-10-21T17:30:00Z');   // 20:30 Türkiye saati
 const CHUNK = 45000;              // bir hücreye yazılacak en fazla karakter (Sheets sınırı 50.000)
 const MAX_CHUNKS = 12;            // tekrar kodu için ayrılan sütun sayısı
 const TOKEN_TTL = 8 * 3600;       // bilet ömrü: 8 saat (saniye)
@@ -113,11 +117,11 @@ function readToken_(token) {
   return { t: t, s: sd, sig: m[4] };
 }
 
-// Tekrar kodunu çözer: LY7.<tohum36>.<skor x10>.<adım36>.<hareketler>
+// Tekrar kodunu çözer: LY8.<tohum36>.<skor x10>.<adım36>.<hareketler>
 function parseReplay_(code) {
-  const m = /^LY7\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(String(code || ''));
-  if (!m) return null;
-  return { seed: parseInt(m[1], 36), tenths: Number(m[2]), ticks: parseInt(m[3], 36), moves: m[4] };
+  const m = /^(LY[0-9]{1,2})\.([0-9a-z]{1,7})\.(\d{1,6})\.([0-9a-z]{1,8})\.([0-9a-z+,\-]*)$/.exec(String(code || ''));
+  if (!m || (m[1] !== GAME_VER && m[1] !== OLD_VER)) return null;
+  return { ver: m[1], seed: parseInt(m[2], 36), tenths: Number(m[3]), ticks: parseInt(m[4], 36), moves: m[5] };
 }
 
 function clean_(s) {
@@ -148,6 +152,7 @@ function submit_(b) {
   const rep = parseReplay_(code);
   if (!rep || code.length > CHUNK * MAX_CHUNKS) return { ok: false, error: 'bad_replay' };
   if (rep.seed !== Number(started.s)) return { ok: false, error: 'bad_replay' };
+  if (rep.ver === OLD_VER && started.t > OLD_VER_UNTIL) return { ok: false, error: 'bad_replay' };   // eski sürümün süresi doldu
   if (rep.tenths !== Math.round(score * 10) || Math.floor(rep.ticks / 6) !== rep.tenths) return { ok: false, error: 'bad_replay' };
   // Kalabalıkta aynı anda gelen skorlar sırayla yazılır; sıra çok uzarsa bilet harcanmadan "busy" döner, oyun tekrar dener
   const lock = LockService.getScriptLock();
