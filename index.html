@@ -230,7 +230,7 @@ body { height: 100%; margin: 0; background: var(--navy); color: var(--ink); font
     <div id="hud">
       <div class="score-chip" id="scoreChip" hidden><span class="k">SKOR</span><span id="scoreVal">0,0</span><small>sn</small></div>
       <span class="hud-label best-label" id="bestLabel" hidden></span>
-      <div class="time" id="time" aria-live="off">25<small>sn</small></div>
+      <div class="time" id="time" aria-live="off">15<small>sn</small></div>
       <div class="bar-wrap" id="barWrap">
         <span class="hud-label">Liman</span>
         <div class="bar" aria-hidden="true">
@@ -253,7 +253,7 @@ body { height: 100%; margin: 0; background: var(--navy); color: var(--ink); font
             <h1 id="tStart">Limana Yanaş</h1>
           </div>
         </div>
-        <p>Rotan liman. Önünde 25 saniyelik bir sefer var: dayan, yanaş, kayıt linki limandaki şişede seni bekliyor.</p>
+        <p>Rotan liman. Önünde 15 saniyelik bir sefer var: dayan, limana yanaş, sınırsız mod açılsın. Kulübe katılmak istersen kayıt linki limandaki şişede.</p>
         <div class="legend">
           <div class="legend-row">
             <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M7 24 11 11 22 5 33 12 35 25 26 34 12 32Z" fill="#eef8ff" stroke="#13304a" stroke-width="2.5" stroke-linejoin="round"/><circle cx="16" cy="19" r="2.2" fill="#13304a"/><circle cx="26" cy="19" r="2.2" fill="#13304a"/><path d="M18 24q3 3 6 0" fill="none" stroke="#13304a" stroke-width="2" stroke-linecap="round"/><ellipse cx="12" cy="23" rx="2.5" ry="1.5" fill="#ff8a9b" opacity=".6"/><ellipse cx="30" cy="23" rx="2.5" ry="1.5" fill="#ff8a9b" opacity=".6"/></svg>
@@ -274,12 +274,12 @@ body { height: 100%; margin: 0; background: var(--navy); color: var(--ink); font
         </div>
         <div class="start-actions" id="startLocked">
           <button class="btn" id="btnStart" type="button">Demir al!</button>
-          <p class="lock-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span><b>Sınırsız mod</b> ve ödüllü sıralama, limana yanaşıp kayıt olduktan sonra açılır.</span></p>
+          <p class="lock-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span><b>Sınırsız mod</b> ve ödüllü sıralama, limana yanaşınca açılır.</span></p>
         </div>
         <div class="start-actions" id="startUnlocked" hidden>
           <p class="hello"><svg viewBox="0 0 24 24" fill="none" stroke="#f2b134" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M10 17h4v4h-4z"/></svg><span id="helloText">Sınırsız mod açık. En uzun dayanan 1. kaptana ödül var!</span></p>
           <button class="btn" id="btnEndless" type="button">Sınırsız mod</button>
-          <button class="btn btn-ghost" id="btnStory" type="button">Hikâye modu · 25 sn</button>
+          <button class="btn btn-ghost" id="btnStory" type="button">Hikâye modu · 15 sn</button>
           <button class="text-btn" id="btnBoard" type="button">Sıralamayı gör</button>
         </div>
         <div class="hint">Parmağınla sürükle ya da ← → tuşlarıyla kaydır</div>
@@ -305,7 +305,7 @@ body { height: 100%; margin: 0; background: var(--navy); color: var(--ink); font
         <h2 id="tWin">Limana yanaştın, kaptan!</h2>
         <blockquote class="saying" id="winSaying"></blockquote>
         <div class="chips" id="winChips"></div>
-        <p class="keeper-line">Standdaki denizci şişeyi sana uzattı. İçinde bir not var.</p>
+        <p class="keeper-line">Standdaki denizci şişeyi sana uzattı. Kulübe katılmak istersen kayıt linki içinde; istemezsen doğrudan sınırsız moda geçebilirsin.</p>
         <div class="bottle-zone" id="bottleZone">
           <button class="bottle" id="bottleBtn" type="button" aria-label="Şişeyi aç, kayıt mesajını oku">
             <svg viewBox="0 0 240 120" aria-hidden="true">
@@ -323,7 +323,7 @@ body { height: 100%; margin: 0; background: var(--navy); color: var(--ink); font
               <path d="M228 30l4-8M234 40l8-3M226 22l1-9" stroke="#f2b134" stroke-width="3" stroke-linecap="round"/>
             </svg>
           </button>
-          <div class="bottle-hint">Şişeye dokun, mesajı aç</div>
+          <div class="bottle-hint">Şişeye dokun, mesajı aç (isteğe bağlı)</div>
         </div>
         <div class="scroll" id="scroll" hidden>
           <div class="scroll-paper">
@@ -409,7 +409,7 @@ body { height: 100%; margin: 0; background: var(--navy); color: var(--ink); font
 const CONFIG = {
   REGISTRATION_URL: "https://forms.gle/bqGTaHGKM19Cwaz7A",          // Google Form vb. kayıt linki
   CLUB_NAME: "İTÜ GMK",          // kartlarda görünen kulüp adı
-  GAME_SECONDS: 25,              // sefer süresi
+  GAME_SECONDS: 15,              // hikâye modu (giriş) sefer süresi
   LIVES: 3,                      // başlangıç can simidi sayısı
   MAX_LIVES: 4,                  // su samurlarının simitleriyle çıkılabilecek en yüksek can
   OTTER_THROW_CHANCE: 0.7,       // su samurlu kayalığın simit fırlatma ihtimali
@@ -511,6 +511,7 @@ const CONFIG = {
   const fmt = (n) => (Math.floor(n * 10) / 10).toFixed(1).replace('.', ',');
 
   const GS = CONFIG.GAME_SECONDS;
+  const STORY_RAMP = 25;      // hikâye modunda zorluğun tavana çıktığı süre (eski 25 sn'lik sefer); GS bundan kısaysa oyun daha kolay biter
   const CLUB_UP = CONFIG.CLUB_NAME.toLocaleUpperCase('tr-TR');
   const stage = $('#stage'), frame = $('#frame'), cv = $('#cv'), ctx = cv.getContext('2d');
 
@@ -951,7 +952,11 @@ const CONFIG = {
     bb.classList.remove('open'); bb.disabled = false;
     $('#bottleZone').hidden = false;
     $('#scroll').hidden = true;
-    $('#unlockBox').hidden = !profile.unlocked;
+    // Limana yanaşan herkes için sınırsız mod açılır; kayıt formu (şişe) isteğe bağlı
+    const first = !profile.unlocked;
+    profile.unlocked = true; saveProfile();
+    $('#unlockBox').hidden = false;
+    if (first) sfx.gain();
     showOverlay('win');
     notify('win');
   }
@@ -963,18 +968,9 @@ const CONFIG = {
       $('#scroll').hidden = false;
       const link = $('#regLink');
       if (regUrl) { link.href = regUrl; link.hidden = false; $('#regMissing').hidden = true; try { link.focus({ preventScroll: true }); } catch (e) {} }
-      else { link.hidden = true; $('#regMissing').hidden = false; unlockEndless(); }
+      else { link.hidden = true; $('#regMissing').hidden = false; }
     }, 650);
   });
-  // Kayıt linkine tıklayınca sınırsız mod açılır (cihazda kalıcı)
-  $('#regLink').addEventListener('click', () => { setTimeout(unlockEndless, 300); });
-  function unlockEndless() {
-    const was = profile.unlocked;
-    profile.unlocked = true; saveProfile();
-    const box = $('#unlockBox');
-    if (box.hidden) { box.hidden = false; if (!was) sfx.gain(); }
-    setTimeout(() => { try { box.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' }); } catch (e) {} }, 50);
-  }
 
   // ---------- Başlangıç ekranı ----------
   function renderStart() {
@@ -1262,7 +1258,7 @@ const CONFIG = {
     return pts;
   }
   const MOODS = ['smile', 'smile', 'grin', 'ooh', 'cat', 'tongue'];
-  // Zorluk: hikâye modunda 25 sn'ye yayılır, sınırsız modda ~100 sn'de tavana yaklaşır ve yavaşça artmaya devam eder
+  // Zorluk: hikâye modunda eski 25 sn'lik eğri korunur (15 sn'de bitince en zor kısma hiç girilmez), sınırsız modda ~100 sn'de tavana yaklaşır ve yavaşça artmaya devam eder
   function diff() {
     if (mode === 'endless') {
       const p = clamp(t / 100, 0, 1);
@@ -1274,7 +1270,7 @@ const CONFIG = {
       const extra = Math.min(0.25, Math.max(0, t - 100) * 0.002);
       return { p, spawnInt: lerp(0.95, 0.36, p), speedMul: 1 + 0.5 * p + extra, chaser: 0.14 + 0.36 * p, rockInt: lerp(3.1, 2.2, p) };
     }
-    const p = clamp(t / GS, 0, 1);
+    const p = clamp(t / STORY_RAMP, 0, 1);
     return { p, spawnInt: lerp(0.95, 0.55, p), speedMul: 1 + 0.22 * p, chaser: 0.14 + 0.22 * p, rockInt: 3.1 };
   }
   function spawnBerg(harmless) {
